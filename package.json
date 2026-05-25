@@ -1,0 +1,14 @@
+{
+  "name": "paperframe-tests",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test:js": "vitest run",
+    "test:js:coverage": "vitest run --coverage"
+  },
+  "devDependencies": {
+    "@vitest/coverage-v8": "^4.0.0",
+    "jsdom": "^27.0.0",
+    "vitest": "^4.0.0"
+  }
+}

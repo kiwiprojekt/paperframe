@@ -1,0 +1,41 @@
+# .NET
+bin/
+obj/
+*.user
+*.suo
+.vs/
+*.userprefs
+
+# Build output
+publish/
+out/
+
+# NuGet
+*.nupkg
+*.snupkg
+packages/
+project.lock.json
+project.fragment.lock.json
+artifacts/
+TestResults/
+
+# Node / JS coverage
+node_modules/
+coverage/
+
+# Rider / VS Code
+.idea/
+.vscode/
+*.DotSettings.user
+
+# OS
+.DS_Store
+Thumbs.db
+
+# App config (contains secrets)
+appsettings.Local.json
+appsettings.*.local.json
+config/
+
+# Docker
+docker-compose.override.yml

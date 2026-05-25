@@ -1,0 +1,878 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Paperframe Manager</title>
+    <link rel="stylesheet" href="/assets/app.css">
+    <!-- Lucide Icons CDN -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+<body>
+
+    <!-- Login Overlay -->
+    <div id="loginOverlay" class="login-overlay hidden">
+        <div class="login-card">
+            <div class="login-header">
+                <div class="login-brand">
+                    <i data-lucide="tablet"></i>
+                    <span class="font-serif">Paperframe</span>
+                </div>
+                <h2>Manager Login</h2>
+                <p>Enter your manager password to continue</p>
+            </div>
+            <form id="loginForm" onsubmit="submitLogin(event)">
+                <div class="form-group" style="margin-bottom: 0.75rem;">
+                    <div class="secret-field-wrapper">
+                        <input type="password" id="loginPassword" placeholder="Password" autocomplete="current-password">
+                        <button type="button" class="secret-toggle-btn" onclick="toggleSecretVisibility('loginPassword', this)" title="Show / hide">
+                            <i data-lucide="eye"></i>
+                        </button>
+                    </div>
+                </div>
+                <div id="loginError" class="login-error hidden"></div>
+                <button type="submit" class="btn btn-primary" style="width: 100%;">
+                    <i data-lucide="log-in"></i> Sign In
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Toast Notifications Container -->
+    <div class="toast-container" id="toastContainer"></div>
+
+    <!-- Sidebar Navigation -->
+    <nav class="sidebar">
+        <div class="sidebar-brand">
+            <i data-lucide="tablet"></i>
+            <h1>Paperframe</h1>
+        </div>
+
+        <ul class="nav-menu">
+            <li class="nav-item active" data-tab="devices">
+                <button onclick="switchTab('devices')">
+                    <i data-lucide="smartphone"></i>
+                    <span>Device Manager</span>
+                </button>
+            </li>
+            <li class="nav-item" data-tab="calendar">
+                <button onclick="switchTab('calendar')">
+                    <i data-lucide="calendar"></i>
+                    <span>Calendar</span>
+                </button>
+            </li>
+            <li class="nav-item" data-tab="immich">
+                <button onclick="switchTab('immich')">
+                    <i data-lucide="image"></i>
+                    <span>Immich</span>
+                </button>
+            </li>
+            <li class="nav-item" data-tab="homeassistant">
+                <button onclick="switchTab('homeassistant')">
+                    <i data-lucide="home"></i>
+                    <span>Home Assistant</span>
+                </button>
+            </li>
+            <li class="nav-item" data-tab="settings">
+                <button onclick="switchTab('settings')">
+                    <i data-lucide="settings"></i>
+                    <span>Settings</span>
+                </button>
+            </li>
+            <li class="nav-item" data-tab="dashboard">
+                <button onclick="switchTab('dashboard')">
+                    <i data-lucide="layout-dashboard"></i>
+                    <span>Telemetry Logs</span>
+                </button>
+            </li>
+        </ul>
+
+        <div class="sidebar-footer">
+            <!-- Unsaved changes warning indicator -->
+            <div id="unsavedChangesIndicator" class="unsaved-indicator">
+                <i data-lucide="alert-triangle"></i> Unsaved Changes
+            </div>
+            <button class="btn btn-primary" id="saveConfigBtn" onclick="saveConfiguration()" disabled>
+                <i data-lucide="save"></i> Save Settings
+            </button>
+            <button class="btn btn-secondary" onclick="reloadConfigData()">
+                <i data-lucide="refresh-cw"></i> Reload Config
+            </button>
+            <button class="btn btn-ghost" id="logoutBtn" onclick="logout()" style="display:none;">
+                <i data-lucide="log-out"></i> Logout
+            </button>
+        </div>
+    </nav>
+
+    <!-- Main Content Area -->
+    <main class="main-content">
+        <!-- HEADER -->
+        <header>
+            <div>
+                <h2 id="pageTitle">Device Manager</h2>
+                <p id="pageSubtitle" class="header-subtitle">Map your frames and track status</p>
+            </div>
+        </header>
+
+        <!-- ==================== TAB PANELS ==================== -->
+
+        <!-- TAB: DEVICE MANAGER -->
+        <div id="tab-devices" class="tab-panel active">
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-title">
+                        <i data-lucide="smartphone"></i>
+                        <span>Register &amp; Edit Paperframe Devices</span>
+                    </div>
+                    <button class="btn btn-primary" onclick="openDeviceModal()">
+                        <i data-lucide="plus"></i> Add Device
+                    </button>
+                </div>
+
+                <p class="card-description">
+                    Devices map your e-reader's unique HTTP header <code>device_id</code> to specific services.
+                </p>
+
+                <div class="device-cards-grid" id="devicesContainer">
+                    <!-- Dynamic Device Cards -->
+                </div>
+            </div>
+        </div>
+
+        <!-- TAB: CALENDAR CONFIGS -->
+        <div id="tab-calendar" class="tab-panel">
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-title">
+                        <i data-lucide="calendar"></i>
+                        <span>Manage Calendar Configurations</span>
+                    </div>
+                    <button class="btn btn-primary" onclick="openCalendarConfigModal()">
+                        <i data-lucide="plus"></i> Add Config
+                    </button>
+                </div>
+
+                <div class="log-table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Config ID</th>
+                                <th>Culture</th>
+                                <th>Timezone</th>
+                                <th>iCal Feeds</th>
+                                <th>Mapped Devices</th>
+                                <th style="text-align: right;">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="calendarListBody">
+                            <tr>
+                                <td colspan="6" style="text-align: center; color: var(--text-secondary); padding: 3rem;">
+                                    Loading calendars...
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- TAB: IMMICH CONFIGS -->
+        <div id="tab-immich" class="tab-panel">
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-title">
+                        <i data-lucide="image"></i>
+                        <span>Manage Immich Photo Frame Configurations</span>
+                    </div>
+                    <button class="btn btn-primary" onclick="openImmichConfigModal()">
+                        <i data-lucide="plus"></i> Add Config
+                    </button>
+                </div>
+
+                <div class="log-table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Config ID</th>
+                                <th>Immich API URL</th>
+                                <th>Target Album</th>
+                                <th>Brightness / Contrast</th>
+                                <th>Mapped Devices</th>
+                                <th style="text-align: right;">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="immichListBody">
+                            <tr>
+                                <td colspan="6" style="text-align: center; color: var(--text-secondary); padding: 3rem;">
+                                    Loading Immich configurations...
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- TAB: HOME ASSISTANT -->
+        <div id="tab-homeassistant" class="tab-panel">
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-title">
+                        <i data-lucide="home"></i>
+                        <span>Home Assistant API Integration</span>
+                    </div>
+                    <button class="btn btn-secondary" onclick="validateHomeAssistantConnection()">
+                        <i data-lucide="check-circle2"></i> Validate Connection
+                    </button>
+                </div>
+
+                <p class="card-description">
+                    Sync device battery levels and check-in times to Home Assistant helpers dynamically.
+                </p>
+
+                <div id="haFormContent">
+                    <div class="form-grid">
+                        <div class="form-group full-width">
+                            <label for="haApiUrl">API base URL</label>
+                            <input type="text" id="haApiUrl" placeholder="http://192.168.1.100:8123/api/" oninput="markUnsavedChanges()">
+                        </div>
+                        <div class="form-group full-width">
+                            <label for="haToken">Long-Lived Access Token (Bearer)</label>
+                            <div class="secret-field-wrapper">
+                                <input type="password" id="haToken" placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." oninput="markUnsavedChanges()">
+                                <button type="button" class="secret-toggle-btn" onclick="toggleSecretVisibility('haToken', this)" title="Show / hide">
+                                    <i data-lucide="eye"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-section">
+                        <div class="section-label" style="margin-bottom: 1.25rem;">Entity Sync Configuration</div>
+
+                        <div class="ha-entity-block">
+                            <div class="ha-entity-input-row">
+                                <div class="form-group" style="flex: 1; margin: 0;">
+                                    <label for="haUpdateTemplate">Last Update Entity Template</label>
+                                    <input type="text" id="haUpdateTemplate" placeholder="input_datetime.paperframe_{deviceId}_update" oninput="markUnsavedChanges()">
+                                </div>
+                                <div class="ha-entity-toggle-col">
+                                    <label>Sync</label>
+                                    <label class="device-toggle-btn" title="Enable / disable last-update sync">
+                                        <input type="checkbox" id="haEnableUpdate" onchange="this.closest('label').querySelector('.ha-toggle-label').textContent = this.checked ? 'Enabled' : 'Disabled'; markUnsavedChanges()">
+                                        <span class="device-toggle-track"><span class="device-toggle-knob"></span></span>
+                                        <span class="ha-toggle-label">Disabled</span>
+                                    </label>
+                                </div>
+                            </div>
+                            <span class="form-hint">Template for the Home Assistant entity. Must include <code>{deviceId}</code>.</span>
+                        </div>
+
+                        <div class="ha-entity-block">
+                            <div class="ha-entity-input-row">
+                                <div class="form-group" style="flex: 1; margin: 0;">
+                                    <label for="haBatteryTemplate">Battery Level Entity Template</label>
+                                    <input type="text" id="haBatteryTemplate" placeholder="input_number.paperframe_{deviceId}_battery" oninput="markUnsavedChanges()">
+                                </div>
+                                <div class="ha-entity-toggle-col">
+                                    <label>Sync</label>
+                                    <label class="device-toggle-btn" title="Enable / disable battery sync">
+                                        <input type="checkbox" id="haEnableBattery" onchange="this.closest('label').querySelector('.ha-toggle-label').textContent = this.checked ? 'Enabled' : 'Disabled'; markUnsavedChanges()">
+                                        <span class="device-toggle-track"><span class="device-toggle-knob"></span></span>
+                                        <span class="ha-toggle-label">Disabled</span>
+                                    </label>
+                                </div>
+                            </div>
+                            <span class="form-hint">Template for the Home Assistant entity. Must include <code>{deviceId}</code>.</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- TAB: SETTINGS -->
+        <div id="tab-settings" class="tab-panel">
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-title">
+                        <i data-lucide="settings"></i>
+                        <span>General Settings</span>
+                    </div>
+                </div>
+
+                <p class="card-description">
+                    Configure server address, enable or disable integration modules, and set a manager password.
+                </p>
+
+                <div class="form-grid">
+                    <div class="form-group full-width">
+                        <label for="settingsServerAddress">Server Address</label>
+                        <input type="text" id="settingsServerAddress" placeholder="http://192.168.1.100:5000" oninput="markUnsavedChanges()">
+                        <span class="form-hint">Used in generated <code>paperframe.sh</code> client scripts. Leave empty to auto-detect: <code id="currentOriginHint"></code></span>
+                    </div>
+                </div>
+
+                <div class="form-section">
+                    <div class="section-label" style="margin-bottom: 1.25rem;">Integration Modules</div>
+                    <div class="settings-integration-list">
+
+                        <div class="settings-integration-row">
+                            <div class="settings-integration-info">
+                                <div class="settings-integration-name"><i data-lucide="calendar"></i> Calendar</div>
+                                <p class="settings-integration-desc">iCal-based calendar rendering for e-ink displays</p>
+                            </div>
+                            <label class="device-toggle-btn" title="Enable / disable Calendar integration">
+                                <input type="checkbox" id="settingsEnableCalendar" checked onchange="this.closest('label').querySelector('.ha-toggle-label').textContent = this.checked ? 'Enabled' : 'Disabled'; markUnsavedChanges(); updateSidebarVisibility()">
+                                <span class="device-toggle-track"><span class="device-toggle-knob"></span></span>
+                                <span class="ha-toggle-label">Enabled</span>
+                            </label>
+                        </div>
+
+                        <div class="settings-integration-row">
+                            <div class="settings-integration-info">
+                                <div class="settings-integration-name"><i data-lucide="image"></i> Immich</div>
+                                <p class="settings-integration-desc">Dithered photo frame streaming from Immich server</p>
+                            </div>
+                            <label class="device-toggle-btn" title="Enable / disable Immich integration">
+                                <input type="checkbox" id="settingsEnableImmich" checked onchange="this.closest('label').querySelector('.ha-toggle-label').textContent = this.checked ? 'Enabled' : 'Disabled'; markUnsavedChanges(); updateSidebarVisibility()">
+                                <span class="device-toggle-track"><span class="device-toggle-knob"></span></span>
+                                <span class="ha-toggle-label">Enabled</span>
+                            </label>
+                        </div>
+
+                        <div class="settings-integration-row">
+                            <div class="settings-integration-info">
+                                <div class="settings-integration-name"><i data-lucide="home"></i> Home Assistant</div>
+                                <p class="settings-integration-desc">Battery and check-in sync to HA helper entities</p>
+                            </div>
+                            <label class="device-toggle-btn" title="Enable / disable Home Assistant integration">
+                                <input type="checkbox" id="settingsEnableHa" checked onchange="this.closest('label').querySelector('.ha-toggle-label').textContent = this.checked ? 'Enabled' : 'Disabled'; markUnsavedChanges(); updateSidebarVisibility()">
+                                <span class="device-toggle-track"><span class="device-toggle-knob"></span></span>
+                                <span class="ha-toggle-label">Enabled</span>
+                            </label>
+                        </div>
+
+                    </div>
+                </div>
+
+                <div class="form-section">
+                    <div class="section-label" style="margin-bottom: 1.25rem;">Security</div>
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label for="settingsPassword">Manager Password</label>
+                            <div class="secret-field-wrapper">
+                                <input type="password" id="settingsPassword" placeholder="Leave blank for no authentication" oninput="markUnsavedChanges()">
+                                <button type="button" class="secret-toggle-btn" onclick="toggleSecretVisibility('settingsPassword', this)" title="Show / hide">
+                                    <i data-lucide="eye"></i>
+                                </button>
+                            </div>
+                            <span class="form-hint">Protects the Paperframe Manager UI. Restart server after saving for changes to take effect.</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- TAB: DASHBOARD & LOGS -->
+        <div id="tab-dashboard" class="tab-panel">
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-title">
+                        <i data-lucide="activity"></i>
+                        <span>Live Device Connection Logs</span>
+                    </div>
+                    <div class="flex-center gap-sm">
+                        <span class="status-dot status-dot-live"></span>
+                        <span class="text-sm text-secondary">Polling active</span>
+                    </div>
+                </div>
+
+                <div class="log-table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Timestamp</th>
+                                <th>Device ID</th>
+                                <th>Battery</th>
+                                <th>Resolution</th>
+                                <th>Service (Config)</th>
+                                <th>Status</th>
+                                <th>Log Message</th>
+                            </tr>
+                        </thead>
+                        <tbody id="logsTableBody">
+                            <tr>
+                                <td colspan="7" style="text-align: center; color: var(--text-secondary); padding: 3rem;">
+                                    <div class="loader mr-sm"></div> Loading live check-ins...
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- ==================== CONFIRM / DELETE MODAL ==================== -->
+    <div class="modal" id="confirmModal">
+        <div class="modal-content modal-sm">
+            <div class="modal-header">
+                <div class="modal-title">
+                    <i data-lucide="alert-triangle"></i>
+                    <span id="confirmModalTitle">Confirm</span>
+                </div>
+                <button class="modal-close" onclick="closeConfirmModal()">
+                    <i data-lucide="x"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <p id="confirmModalMessage" style="color: var(--text-secondary); font-size: 0.95rem; line-height: 1.6;"></p>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeConfirmModal()">Cancel</button>
+                <button class="btn btn-danger" id="confirmModalBtn">
+                    <i data-lucide="trash-2"></i> Delete
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==================== DEVICE MANAGEMENT MODAL ==================== -->
+    <div class="modal" id="deviceModal">
+        <div class="modal-content modal-sm">
+            <div class="modal-header">
+                <div class="modal-title" id="deviceModalTitle">
+                    <i data-lucide="smartphone"></i>
+                    <span>Configure Device</span>
+                </div>
+                <button class="modal-close" onclick="closeDeviceModal()">
+                    <i data-lucide="x"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="form-grid" style="grid-template-columns: 1fr; gap: 1.25rem; margin-bottom: 0;">
+                    <div class="form-group">
+                        <label for="modalDeviceId">Device ID</label>
+                        <input type="text" id="modalDeviceId" placeholder="e.g. kitchen_frame_1">
+                        <span class="form-hint">Must match the <code>DEVICE_ID</code> set in your device's shell script.</span>
+                    </div>
+                    <div class="form-group">
+                        <label for="modalDeviceService">Service Mapping</label>
+                        <select id="modalDeviceService" onchange="populateModalConfigDropdown()">
+                            <option value="Calendar">Calendar</option>
+                            <option value="Immich">Immich (Photo Frame)</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="modalDeviceConfigId">Configuration</label>
+                        <select id="modalDeviceConfigId">
+                            <!-- Populated dynamically based on service selection -->
+                        </select>
+                    </div>
+
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeDeviceModal()">Cancel</button>
+                <button class="btn btn-primary" onclick="saveDeviceModalData()">
+                    <i data-lucide="check"></i> Apply Mapping
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==================== LAUNCHER CLIENT MODAL ==================== -->
+    <div class="modal" id="launcherModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div class="modal-title" id="launcherModalTitle">
+                    <i data-lucide="terminal"></i>
+                    <span>Configure paperframe.sh Client Launcher</span>
+                </div>
+                <button class="modal-close" onclick="closeLauncherModal()">
+                    <i data-lucide="x"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <p class="text-secondary" style="font-size: 0.9rem; margin-bottom: 1.25rem;">
+                    Configure the deep sleep interval for your Paperframe battery loop script. The server will automatically calculate the aggregate seconds and compile your pre-configured client script in real-time.
+                </p>
+
+                <!-- Sleep Interval Controls -->
+                <div class="sleep-panel">
+                    <span class="sleep-panel-label">Sleep Interval (Hours, Minutes, Seconds)</span>
+                    <div class="sleep-fields">
+                        <div class="sleep-field">
+                            <label for="launcherSleepHours">Hours</label>
+                            <input type="number" id="launcherSleepHours" value="2" min="0" oninput="updateLauncherScriptPreview()">
+                        </div>
+                        <div class="sleep-field">
+                            <label for="launcherSleepMinutes">Minutes</label>
+                            <input type="number" id="launcherSleepMinutes" value="0" min="0" max="59" oninput="updateLauncherScriptPreview()">
+                        </div>
+                        <div class="sleep-field">
+                            <label for="launcherSleepSeconds">Seconds</label>
+                            <input type="number" id="launcherSleepSeconds" value="0" min="0" max="59" oninput="updateLauncherScriptPreview()">
+                        </div>
+                        <div class="sleep-total">
+                            Total: <code id="totalSleepSecondsDisplay" class="sleep-total-value">7200</code> seconds
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Step-by-Step Instructions -->
+                <div class="instructions-panel">
+                    <h4>
+                        <i data-lucide="help-circle"></i>
+                        Paperframe client installation instructions:
+                    </h4>
+                    <ol>
+                        <li>Connect your jailbroken e-reader to your computer using a USB cable.</li>
+                        <li>Download <code>paperframe.sh</code> using the button below and copy it directly to the <strong><code>documents</code></strong> directory on your Kindle (typically mounted as <code>/mnt/us/documents/</code>).</li>
+                        <li>Eject the USB connection safely.</li>
+                        <li>Open library page on your kindle and click Paperframe Client book</li>
+                        <li>Your device will request its personalized script, clear and update the E-Ink screen, and then enter a deep CPU sleep cycle until the next scheduled update.</li>
+                        <li>You can force refresh the display at any time by pressing the power button.</li>
+                        <li>To exit the script disable the device in the Paperframe Manager.</li>
+                    </ol>
+                </div>
+
+                <div class="section-label">Script Code Preview</div>
+                <pre class="code-block code-block-scroll" id="launcherCodeContent">Generating launcher script...</pre>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeLauncherModal()">Close</button>
+                <button class="btn btn-primary" onclick="downloadConfiguredLauncher()">
+                    <i data-lucide="download"></i> Download paperframe.sh
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==================== CALENDAR CONFIG EDITOR MODAL ==================== -->
+    <div class="modal" id="calendarConfigModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div class="modal-title" id="calendarConfigModalTitle">
+                    <i data-lucide="calendar"></i>
+                    <span>Edit Calendar Configuration</span>
+                </div>
+                <button class="modal-close" onclick="closeCalendarConfigModal()">
+                    <i data-lucide="x"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="editCalConfigId">
+                <div class="form-grid">
+                    <div class="form-group" id="editCalConfigIdGroup">
+                        <label>Config ID</label>
+                        <input type="text" id="editCalConfigIdField" placeholder="e.g. calendars_home" oninput="markUnsavedChanges()">
+                    </div>
+                    <div class="form-group">
+                        <label>Culture Info Identifier</label>
+                        <input type="text" id="editCalCulture" placeholder="pl-PL" oninput="markUnsavedChanges()">
+                    </div>
+                    <div class="form-group">
+                        <label>Time Zone ID</label>
+                        <input type="text" id="editCalTimezone" placeholder="Poland" oninput="markUnsavedChanges()">
+                    </div>
+                    <div class="form-group">
+                        <label>Header: Today Label</label>
+                        <input type="text" id="editCalToday" placeholder="dzisiaj" oninput="markUnsavedChanges()">
+                    </div>
+                    <div class="form-group">
+                        <label>Header: Tomorrow Label</label>
+                        <input type="text" id="editCalTomorrow" placeholder="jutro" oninput="markUnsavedChanges()">
+                    </div>
+                    <div class="form-group">
+                        <label>Fbink Path (on Kindle)</label>
+                        <input type="text" id="editCalFbink" oninput="markUnsavedChanges()">
+                    </div>
+                    <div class="form-group">
+                        <label>Font Path (on Kindle)</label>
+                        <input type="text" id="editCalFont" oninput="markUnsavedChanges()">
+                    </div>
+
+                    <div class="form-group full-width mt-md">
+                        <label>Calendar iCal URLs</label>
+                        <div class="array-input-list" id="editCalIcalUrlsList">
+                            <!-- Dynamic rows of iCal urls -->
+                        </div>
+                        <button class="btn btn-secondary mt-md" style="width: fit-content;" onclick="addEditCalIcalUrlRow()">
+                            <i data-lucide="plus"></i> Add iCal feed URL
+                        </button>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-danger" id="editCalDeleteBtn" onclick="deleteCalendarConfigFromModal()">
+                    <i data-lucide="trash-2"></i> Delete Config
+                </button>
+                <button class="btn btn-secondary" onclick="validateCalendarConfigFromModal()">
+                    <i data-lucide="check-square"></i> Validate Connection
+                </button>
+                <button class="btn btn-secondary" onclick="closeCalendarConfigModal()">Cancel</button>
+                <button class="btn btn-primary" onclick="saveCalendarConfigModalData()">
+                    <i data-lucide="check"></i> Apply Changes
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==================== IMMICH CONFIG EDITOR MODAL ==================== -->
+    <div class="modal" id="immichConfigModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div class="modal-title" id="immichConfigModalTitle">
+                    <i data-lucide="image"></i>
+                    <span>Edit Immich Configuration</span>
+                </div>
+                <button class="modal-close" onclick="closeImmichConfigModal()">
+                    <i data-lucide="x"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="editImmichConfigId">
+                <div class="form-grid">
+                    <div class="form-group" id="editImmichConfigIdGroup">
+                        <label>Config ID</label>
+                        <input type="text" id="editImmichConfigIdField" placeholder="e.g. frame_kitchen" oninput="markUnsavedChanges()">
+                    </div>
+                    <div class="form-group">
+                        <label>Immich API URL</label>
+                        <input type="text" id="editImmichApiUrl" placeholder="http://192.168.1.50:2283/api/" oninput="markUnsavedChanges()">
+                    </div>
+                    <div class="form-group">
+                        <label>Immich API Key</label>
+                        <div class="secret-field-wrapper">
+                            <input type="password" id="editImmichApiKey" placeholder="Your API key" oninput="markUnsavedChanges()">
+                            <button type="button" class="secret-toggle-btn" onclick="toggleSecretVisibility('editImmichApiKey', this)" title="Show / hide">
+                                <i data-lucide="eye"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>Album Name</label>
+                        <div style="display: flex; gap: 0.5rem;">
+                            <input type="text" id="editImmichAlbumName" placeholder="Paperframe" style="flex-grow: 1;" oninput="markUnsavedChanges()">
+                            <button class="btn btn-secondary" onclick="loadAlbumsForEditModal()" id="editModalBrowseBtn">
+                                <i data-lucide="refresh-cw"></i> Load Albums
+                            </button>
+                        </div>
+                        <select id="editImmichAlbumSelect" style="display: none; margin-top: 0.5rem;" onchange="selectEditModalDropdownAlbum(this.value)">
+                            <!-- Populated dynamically -->
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Fbink Path (on Kindle)</label>
+                        <input type="text" id="editImmichFbink" oninput="markUnsavedChanges()">
+                    </div>
+                    <div class="form-group full-width mt-md">
+                        <label>Brightness &amp; Contrast Adjustments</label>
+                        <div class="slider-group">
+                            <div class="slider-item">
+                                <label>Brightness: <span id="editImmichBrightnessVal">10</span>%</label>
+                                <input type="range" id="editImmichBrightness" min="-100" max="100" value="10"
+                                    oninput="document.getElementById('editImmichBrightnessVal').innerText = this.value; markUnsavedChanges()" style="width: 100%;">
+                            </div>
+                            <div class="slider-item">
+                                <label>Contrast: <span id="editImmichContrastVal">30</span>%</label>
+                                <input type="range" id="editImmichContrast" min="-100" max="100" value="30"
+                                    oninput="document.getElementById('editImmichContrastVal').innerText = this.value; markUnsavedChanges()" style="width: 100%;">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-danger" id="editImmichDeleteBtn" onclick="deleteImmichConfigFromModal()">
+                    <i data-lucide="trash-2"></i> Delete Config
+                </button>
+                <button class="btn btn-secondary" onclick="validateImmichConfigFromModal()">
+                    <i data-lucide="check-square"></i> Validate Connection
+                </button>
+                <button class="btn btn-secondary" onclick="closeImmichConfigModal()">Cancel</button>
+                <button class="btn btn-primary" onclick="saveImmichConfigModalData()">
+                    <i data-lucide="check"></i> Apply Changes
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==================== TEMPLATES ==================== -->
+
+    <!-- Toast -->
+    <template id="tpl-toast">
+        <div class="toast">
+            <i data-field="icon"></i>
+            <span data-field="message"></span>
+        </div>
+    </template>
+
+    <!-- Device card -->
+    <template id="tpl-device-card">
+        <div class="device-row">
+            <div class="device-frame-mock">
+                <div class="device-frame-inner">
+                    <span class="device-frame-type-label" data-field="typeLabel"></span>
+                    <i data-field="typeIcon"></i>
+                    <span class="frame-label-top" data-field="frameConfigId"></span>
+                </div>
+            </div>
+            <div class="device-row-content">
+                <div class="device-row-header">
+                    <div class="device-card-name">
+                        <span data-field="deviceId"></span>
+                    </div>
+                    <div class="device-header-actions">
+                        <label class="device-toggle-btn" title="Enable / disable device">
+                            <input type="checkbox" data-action="toggle">
+                            <span class="device-toggle-track">
+                                <span class="device-toggle-knob"></span>
+                            </span>
+                            <span data-field="toggleLabel"></span>
+                        </label>
+                        <button class="btn btn-secondary btn-sm" data-action="edit">
+                            <i data-lucide="pencil"></i> Edit
+                        </button>
+                        <button class="btn btn-danger btn-sm" data-action="delete">
+                            <i data-lucide="trash-2"></i> Remove
+                        </button>
+                    </div>
+                </div>
+                <div class="device-card-meta">
+                    <div class="device-meta-item">
+                        <span class="meta-label">Service</span>
+                        <span class="meta-value" data-field="serviceName"></span>
+                    </div>
+                    <div class="device-meta-item">
+                        <span class="meta-label">Config</span>
+                        <span class="meta-value" data-field="metaConfigId"></span>
+                    </div>
+                    <div class="device-meta-item">
+                        <span class="meta-label">Battery</span>
+                        <span class="meta-value" data-field="battery"></span>
+                    </div>
+                    <div class="device-meta-item">
+                        <span class="meta-label">Last Seen</span>
+                        <span class="meta-value" data-field="lastSeen"></span>
+                    </div>
+                </div>
+                <div class="device-card-actions">
+                    <div class="device-actions-secondary">
+                        <button class="btn btn-secondary btn-xs" data-action="launcher">
+                            <i data-lucide="terminal"></i> paperframe.sh
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </template>
+
+    <!-- Device empty state -->
+    <template id="tpl-device-empty">
+        <div style="grid-column: 1/-1; text-align: center; color: var(--text-secondary); padding: 3rem;">
+            <p>No Paperframe devices configured. Click Add Device above to map your first frame!</p>
+        </div>
+    </template>
+
+    <!-- Calendar table row -->
+    <template id="tpl-calendar-row">
+        <tr>
+            <td class="font-serif" data-field="configId"></td>
+            <td><code class="code-chip" data-field="culture"></code></td>
+            <td data-field="timezone"></td>
+            <td><span class="badge badge-redirect" style="font-weight: 700;" data-field="feedCount"></span></td>
+            <td><div style="display: flex; flex-wrap: wrap; gap: 0.25rem;" data-field="mappedDevices"></div></td>
+            <td style="text-align: right;">
+                <div style="display: flex; gap: 0.5rem; justify-content: flex-end;">
+                    <button class="btn btn-secondary btn-sm" data-action="edit">
+                        <i data-lucide="pencil"></i> Edit
+                    </button>
+                    <button class="btn btn-danger btn-sm" data-action="delete">
+                        <i data-lucide="trash-2"></i> Delete
+                    </button>
+                </div>
+            </td>
+        </tr>
+    </template>
+
+    <!-- Calendar empty state -->
+    <template id="tpl-calendar-empty">
+        <tr>
+            <td colspan="6" style="text-align: center; color: var(--text-secondary); padding: 3rem;">
+                No calendars configured. Click Add Config above to create one.
+            </td>
+        </tr>
+    </template>
+
+    <!-- Immich table row -->
+    <template id="tpl-immich-row">
+        <tr>
+            <td class="font-serif" data-field="configId"></td>
+            <td class="text-secondary" style="max-width: 250px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" data-field="apiUrl"></td>
+            <td><span class="badge badge-success" style="font-weight: 700;" data-field="albumName"></span></td>
+            <td>B: <span style="font-weight:600;" data-field="brightness"></span> / C: <span style="font-weight:600;" data-field="contrast"></span></td>
+            <td><div style="display: flex; flex-wrap: wrap; gap: 0.25rem;" data-field="mappedDevices"></div></td>
+            <td style="text-align: right;">
+                <div style="display: flex; gap: 0.5rem; justify-content: flex-end;">
+                    <button class="btn btn-secondary btn-sm" data-action="edit">
+                        <i data-lucide="pencil"></i> Edit
+                    </button>
+                    <button class="btn btn-danger btn-sm" data-action="delete">
+                        <i data-lucide="trash-2"></i> Delete
+                    </button>
+                </div>
+            </td>
+        </tr>
+    </template>
+
+    <!-- Immich empty state -->
+    <template id="tpl-immich-empty">
+        <tr>
+            <td colspan="6" style="text-align: center; color: var(--text-secondary); padding: 3rem;">
+                No Immich configurations found. Click Add Config above to create one.
+            </td>
+        </tr>
+    </template>
+
+    <!-- Telemetry log row -->
+    <template id="tpl-log-row">
+        <tr>
+            <td style="font-weight: 500;">
+                <span data-field="time"></span>
+                <span class="text-xs text-secondary" style="display: block;" data-field="date"></span>
+            </td>
+            <td><code class="code-chip" data-field="deviceId"></code></td>
+            <td style="font-weight: 600;" data-field="battery"></td>
+            <td data-field="resolution"></td>
+            <td><strong data-field="service"></strong> <span class="text-sm text-secondary" data-field="configId"></span></td>
+            <td><span class="badge" data-field="statusBadge"></span></td>
+            <td class="text-secondary" style="max-width: 250px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" data-field="message"></td>
+        </tr>
+    </template>
+
+    <!-- Telemetry log empty state -->
+    <template id="tpl-log-empty">
+        <tr>
+            <td colspan="7" style="text-align: center; color: var(--text-secondary); padding: 3rem;">
+                <i data-lucide="inbox" style="width: 32px; height: 32px; margin-bottom: 0.5rem; color: var(--text-secondary)"></i>
+                <p>No check-in activity recorded yet.</p>
+            </td>
+        </tr>
+    </template>
+
+    <!-- iCal URL input row -->
+    <template id="tpl-ical-url-row">
+        <div class="array-input-row">
+            <input type="text" class="ical-url-input" placeholder="https://calendar.google.com/calendar/ical/.../basic.ics" style="flex-grow: 1;">
+            <button class="btn btn-danger btn-sm">
+                <i data-lucide="trash" style="width: 14px; height: 14px;"></i>
+            </button>
+        </div>
+    </template>
+
+    <script type="module" src="/assets/app.js"></script>
+</body>
+</html>
