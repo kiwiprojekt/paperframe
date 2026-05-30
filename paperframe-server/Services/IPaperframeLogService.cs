@@ -6,21 +6,21 @@ namespace paperframe_server.Services;
 public class PaperframeLogEntry
 {
     public DateTime Timestamp { get; set; }
-    public string DeviceId { get; set; }
+    public string DeviceId { get; set; } = string.Empty;
     public int? Battery { get; set; }
-    public string ScreenResolution { get; set; }
-    public string Service { get; set; }
-    public string ConfigId { get; set; }
-    public string Status { get; set; } // "Redirect", "Success", "Error"
-    public string Message { get; set; }
+    public string ScreenResolution { get; set; } = string.Empty;
+    public string Service { get; set; } = string.Empty;
+    public string ConfigId { get; set; } = string.Empty;
+    public string Status { get; set; } = string.Empty; // "Redirect", "Success", "Error"
+    public string Message { get; set; } = string.Empty;
 }
 
 public class DeviceStatus
 {
-    public string DeviceId { get; set; }
+    public string DeviceId { get; set; } = string.Empty;
     public int? Battery { get; set; }
     public DateTime LastUpdate { get; set; }
-    public string Status { get; set; }
+    public string Status { get; set; } = string.Empty;
 }
 
 public interface IPaperframeLogService

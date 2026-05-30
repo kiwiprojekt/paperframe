@@ -179,7 +179,7 @@ describe('Paperframe manager app.js', () => {
   });
 
   it('updates launcher preview from sleep inputs and custom server address', async () => {
-    const { document, api, close } = await loadApp();
+    const { window, document, api, close } = await loadApp();
     api.setAppConfig({
       devices: {},
       calendar: {},
@@ -187,12 +187,21 @@ describe('Paperframe manager app.js', () => {
       homeAssistant: {},
       settings: { serverAddress: 'http://custom.local' }
     });
+    mockFetch(window, async (url) => {
+      const urlObj = new URL(url, 'http://paperframe.local');
+      const sleepSeconds = urlObj.searchParams.get('sleepSeconds');
+      return {
+        status: 200,
+        ok: true,
+        text: async () => `#!/bin/sh\nDEVICE_ID="kindle-a"\nSLEEP_TIME_S=${sleepSeconds}\nSERVICES_URL="http://custom.local"\n`
+      };
+    });
     api.setLauncherDeviceId('kindle-a');
     document.getElementById('launcherSleepHours').value = '1';
     document.getElementById('launcherSleepMinutes').value = '2';
     document.getElementById('launcherSleepSeconds').value = '3';
 
-    api.updateLauncherScriptPreview();
+    await api.updateLauncherScriptPreview();
 
     expect(document.getElementById('totalSleepSecondsDisplay').innerText).toBe(3723);
     const script = document.getElementById('launcherCodeContent').innerText;

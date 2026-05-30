@@ -5,7 +5,7 @@ import { timeAgo, renderDeviceCards, openDeviceModal, closeDeviceModal, populate
 import { renderCalendarConfigUI, openCalendarConfigModal, closeCalendarConfigModal, renderEditCalIcalUrls, updateEditCalIcalUrlValue, addEditCalIcalUrlRow, removeEditCalIcalUrlRow, saveCalendarConfigModalData, deleteCalendarConfigFromModal, deleteCalendarConfig, validateCalendarConfigFromModal } from './modules/calendar.js';
 import { renderImmichConfigUI, openImmichConfigModal, closeImmichConfigModal, loadAlbumsForEditModal, selectEditModalDropdownAlbum, saveImmichConfigModalData, deleteImmichConfigFromModal, deleteImmichConfig, validateImmichConfigFromModal } from './modules/immich.js';
 import { updateSidebarVisibility, validateHomeAssistantConnection } from './modules/homeassistant.js';
-import { openLauncherModal, closeLauncherModal, getLauncherScriptTemplate, updateLauncherScriptPreview, downloadConfiguredLauncher, setLauncherDeviceId, launcherDeviceId } from './modules/launcher.js';
+import { openLauncherModal, closeLauncherModal, updateLauncherScriptPreview, downloadConfiguredLauncher, setLauncherDeviceId, launcherDeviceId } from './modules/launcher.js';
 
 // Bind methods to window for inline HTML attributes (onclick, oninput, etc.)
 window.submitLogin = submitLogin;
@@ -99,7 +99,6 @@ if (globalThis.__PAPERFRAME_TEST__) {
         saveImmichConfigModalData,
         updateSidebarVisibility,
         getServerUrl,
-        getLauncherScriptTemplate,
         updateLauncherScriptPreview,
         downloadConfiguredLauncher,
         getAppConfig: () => AppConfig,

@@ -40,14 +40,17 @@ public class MainController : ControllerBase
         {
             if (_config.Devices != null && _config.Devices.TryGetValue(deviceId, out var deviceConfig))
             {
+                var serviceName = deviceConfig.ServiceName ?? "Unknown";
+                var configId = deviceConfig.ConfigId ?? "None";
+
                 if (deviceConfig.Disabled == true)
                 {
                     _logService.LogCheckIn(
                         deviceId, 
                         battery, 
                         res, 
-                        deviceConfig.ServiceName, 
-                        deviceConfig.ConfigId, 
+                        serviceName, 
+                        configId, 
                         "Disabled", 
                         "Device is disabled on server.");
 
@@ -74,12 +77,12 @@ exit 1
                     deviceId, 
                     battery, 
                     res, 
-                    deviceConfig.ServiceName, 
-                    deviceConfig.ConfigId, 
+                    serviceName, 
+                    configId, 
                     "Redirect", 
-                    $"Redirected to /{deviceConfig.ServiceName}/{deviceConfig.ConfigId}");
+                    $"Redirected to /{serviceName}/{configId}");
 
-                return Redirect($"/{deviceConfig.ServiceName.ToLower()}/{deviceConfig.ConfigId}");
+                return Redirect($"/{serviceName.ToLower()}/{configId}");
             }
             else
             {

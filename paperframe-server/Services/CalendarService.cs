@@ -1,5 +1,6 @@
 using Flurl.Http;
 using Ical.Net;
+using Ical.Net.CalendarComponents;
 using Ical.Net.DataTypes;
 using Microsoft.Extensions.Options;
 
@@ -21,42 +22,27 @@ public class CalendarService : ICalendarService
     
     public async Task<List<ICalendarService.CalendarEntry>> GetCalendarEventsForDateRange(string icalUrl, DateTime from, DateTime to)
     {
+        var results = new List<ICalendarService.CalendarEntry>();
         var icalText = await icalUrl.GetStringAsync();
         var calendar = Calendar.Load(icalText);
+        if (calendar == null) return results;
         
-        var fromDate = new CalDateTime(from.ToUniversalTime());
-        var toDate = new CalDateTime(to.ToUniversalTime());
-
         var seen = new HashSet<(DateTime, string)>();
-        var results = new List<ICalendarService.CalendarEntry>();
 
-        foreach (var e in calendar.Events)
+        var occurrences = calendar.GetOccurrences(new CalDateTime(from)).TakeWhileBefore(new CalDateTime(to));
+        foreach (var occ in occurrences)
         {
-            if (e.RecurrenceRules.Any())
+            if (occ.Source is not CalendarEvent e) continue;
+
+            var entry = new ICalendarService.CalendarEntry
             {
-                foreach (var occ in e.GetOccurrences(fromDate).TakeWhileBefore(toDate))
-                {
-                    var entry = new ICalendarService.CalendarEntry
-                    {
-                        UtcDate = occ.Period.StartTime.AsUtc,
-                        Summary = e.Summary,
-                        IsAllDayEvent = e.IsAllDay
-                    };
-                    if (seen.Add((entry.UtcDate, entry.Summary)))
-                        results.Add(entry);
-                }
-            }
-            else if (e.Start >= fromDate && e.Start < toDate)
-            {
-                var entry = new ICalendarService.CalendarEntry
-                {
-                    UtcDate = e.Start.AsUtc,
-                    Summary = e.Summary,
-                    IsAllDayEvent = e.IsAllDay
-                };
-                if (seen.Add((entry.UtcDate, entry.Summary)))
-                    results.Add(entry);
-            }
+                UtcDate = occ.Period.StartTime.AsUtc,
+                Summary = e.Summary ?? string.Empty,
+                IsAllDayEvent = e.IsAllDay
+            };
+
+            if (seen.Add((entry.UtcDate, entry.Summary)))
+                results.Add(entry);
         }
 
         return results;

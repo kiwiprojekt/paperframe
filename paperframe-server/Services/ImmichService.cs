@@ -47,7 +47,7 @@ public class ImmichService : IImmichService
         }
 
         var alreadyServed = getAlreadyServed(deviceId);
-        string imageId;
+        string? imageId;
 
         lock (_servedLock)
         {
@@ -72,13 +72,13 @@ public class ImmichService : IImmichService
     
     private class ImmichAsset
     {
-        public string Id { get; set; }
+        public string Id { get; set; } = string.Empty;
     }
     
     private class ImmichAlbum
     {
-        public string AlbumName { get; set; }
-        public string Id { get; set; }
-        public ImmichAsset[] Assets { get; set; }
+        public string AlbumName { get; set; } = string.Empty;
+        public string Id { get; set; } = string.Empty;
+        public ImmichAsset[] Assets { get; set; } = Array.Empty<ImmichAsset>();
     }
 }

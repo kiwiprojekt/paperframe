@@ -92,6 +92,16 @@ public class ConfigController : ControllerBase
 
         try
         {
+            if (string.IsNullOrEmpty(config.CultureInfoName))
+            {
+                return Ok(new { success = false, message = "Invalid culture identifier: '' (e.g. use 'pl-PL' or 'en-US')" });
+            }
+
+            if (string.IsNullOrEmpty(config.TimeZoneId))
+            {
+                return Ok(new { success = false, message = "Invalid Timezone ID: '' (e.g. use 'Poland' or 'Europe/Warsaw')" });
+            }
+
             // Validate Culture
             try
             {
@@ -358,10 +368,10 @@ done
     private class ImmichAlbum
     {
         [System.Text.Json.Serialization.JsonPropertyName("albumName")]
-        public string AlbumName { get; set; }
+        public string AlbumName { get; set; } = string.Empty;
 
         [System.Text.Json.Serialization.JsonPropertyName("id")]
-        public string Id { get; set; }
+        public string Id { get; set; } = string.Empty;
 
         [System.Text.Json.Serialization.JsonPropertyName("assetCount")]
         public int AssetCount { get; set; }
@@ -370,6 +380,6 @@ done
 
 public class ImmichAlbumsRequest
 {
-    public string ApiUrl { get; set; }
-    public string ApiKey { get; set; }
+    public string ApiUrl { get; set; } = string.Empty;
+    public string ApiKey { get; set; } = string.Empty;
 }

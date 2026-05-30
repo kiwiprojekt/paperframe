@@ -62,11 +62,11 @@ public class CalendarController : ControllerBase
             var m = decimal.TryParse(screenRes.Split(',')[0], out var screenWidth) && screenWidth > 0
                 ? screenWidth / 758m
                 : 1m;
-            var timeZone = TimeZoneInfo.FindSystemTimeZoneById(config.TimeZoneId);
+            var timeZone = TimeZoneInfo.FindSystemTimeZoneById(config.TimeZoneId ?? "UTC");
             var date = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, timeZone);
-            var culture = System.Globalization.CultureInfo.GetCultureInfo(config.CultureInfoName);
+            var culture = System.Globalization.CultureInfo.GetCultureInfo(config.CultureInfoName ?? "en-US");
             
-            var events = await this._calendarService.GetCalendarEventsForDateRange(config.IcalUrls, date, date.AddDays(14));
+            var events = await this._calendarService.GetCalendarEventsForDateRange(config.IcalUrls ?? Array.Empty<string>(), date, date.AddDays(14));
 
             var context = new CalendarLayoutContext
             {

@@ -69,8 +69,8 @@ $FBINK -q ""{dayOfWeek}"" -t regular=$FONT,size={dayOfWeekFontSize},top={dayOfWe
             if (positionTop > (int)(905*m)) break;
             var header = group.Key switch
             {
-                0 => config.HeaderToday,
-                1 => config.HeaderTomorrow,
+                0 => config.HeaderToday ?? "TODAY",
+                1 => config.HeaderTomorrow ?? "TOMORROW",
                 _ => TimeZoneInfo.ConvertTime(group.First().UtcDate, timeZone).ToString("dddd, d MMMM", culture)
             };
 
