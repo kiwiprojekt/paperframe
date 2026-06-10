@@ -10,6 +10,8 @@ public class AppSettings
 
     public Dictionary<string, ImmichConfig>? Immich { get; set; }
 
+    public Dictionary<string, ArtChicagoConfig>? ArtChicago { get; set; }
+
     public HomeAssistantConfig? HomeAssistant { get; set; }
 
     public SettingsConfig? Settings { get; set; }
@@ -19,6 +21,7 @@ public class AppSettings
         public string? ServerAddress { get; set; }
         public bool? EnableCalendar { get; set; }
         public bool? EnableImmich { get; set; }
+        public bool? EnableArtChicago { get; set; }
         public bool? EnableHomeAssistant { get; set; }
         public string? ManagerPassword { get; set; }
     }
@@ -62,5 +65,15 @@ public class AppSettings
         public string? FbinkPath { get; set; }
         public int Brightness { get; set; }
         public int Contrast { get; set; }
+    }
+
+    public class ArtChicagoConfig
+    {
+        public string? Query { get; set; }
+        public string? FbinkPath { get; set; }
+        public int Brightness { get; set; }
+        public int Contrast { get; set; }
+        public string? Orientation { get; set; } = "all";
+        public int Rotation { get; set; } = 0;
     }
 }

@@ -39,3 +39,5 @@ config/
 
 # Docker
 docker-compose.override.yml
+
+cookies.txt

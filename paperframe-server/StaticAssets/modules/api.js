@@ -3,6 +3,7 @@ import { showToast, openConfirmModal, markUnsavedChanges } from './ui-utils.js';
 import { renderDeviceCards } from './devices.js';
 import { renderCalendarConfigUI } from './calendar.js';
 import { renderImmichConfigUI } from './immich.js';
+import { renderArtChicagoConfigUI } from './artchicago.js';
 import { updateSidebarVisibility } from './homeassistant.js';
 
 export class AuthError extends Error { constructor() { super('auth'); } }
@@ -119,11 +120,13 @@ export async function loadConfigData() {
 
         const calEnabled = s.enableCalendar      !== false;
         const immEnabled = s.enableImmich        !== false;
+        const artEnabled = s.enableArtChicago    !== false;
         const haEnabled  = s.enableHomeAssistant !== false;
         document.getElementById('settingsEnableCalendar').checked = calEnabled;
         document.getElementById('settingsEnableImmich').checked   = immEnabled;
+        document.getElementById('settingsEnableArtChicago').checked = artEnabled;
         document.getElementById('settingsEnableHa').checked       = haEnabled;
-        ['settingsEnableCalendar', 'settingsEnableImmich', 'settingsEnableHa'].forEach(id => {
+        ['settingsEnableCalendar', 'settingsEnableImmich', 'settingsEnableArtChicago', 'settingsEnableHa'].forEach(id => {
             const el = document.getElementById(id);
             el.closest('label').querySelector('.ha-toggle-label').textContent = el.checked ? 'Enabled' : 'Disabled';
         });
@@ -133,6 +136,7 @@ export async function loadConfigData() {
         renderDeviceCards();
         renderCalendarConfigUI();
         renderImmichConfigUI();
+        renderArtChicagoConfigUI();
 
         markUnsavedChanges(false);
         showToast('Configuration successfully loaded from server.');
@@ -155,6 +159,7 @@ export async function saveConfiguration() {
     AppConfig.settings.serverAddress       = document.getElementById('settingsServerAddress').value;
     AppConfig.settings.enableCalendar      = document.getElementById('settingsEnableCalendar').checked;
     AppConfig.settings.enableImmich        = document.getElementById('settingsEnableImmich').checked;
+    AppConfig.settings.enableArtChicago    = document.getElementById('settingsEnableArtChicago').checked;
     AppConfig.settings.enableHomeAssistant = document.getElementById('settingsEnableHa').checked;
     AppConfig.settings.managerPassword     = document.getElementById('settingsPassword').value;
 

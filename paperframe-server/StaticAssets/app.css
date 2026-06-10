@@ -907,6 +907,7 @@ tr:hover td {
     flex-direction: column;
     gap: 0.75rem;
     z-index: 1000;
+    pointer-events: none;
 }
 
 .toast {
@@ -923,6 +924,7 @@ tr:hover td {
     transform: translateY(10px);
     opacity: 0;
     transition: all 0.25s ease-out;
+    pointer-events: auto;
 }
 
 .toast.show {

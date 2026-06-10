@@ -6,6 +6,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using Flurl;
 using Flurl.Http;
 using paperframe_server.Services;
 using System.Globalization;
@@ -204,6 +205,52 @@ public class ConfigController : ControllerBase
         }
     }
 
+    [HttpPost("validate/artchicago")]
+    public async Task<IActionResult> ValidateArtChicago([FromBody] AppSettings.ArtChicagoConfig config)
+    {
+        if (config == null) return BadRequest(new { message = "Invalid ArtChicago config" });
+
+        try
+        {
+            var query = config.Query?.Trim() ?? "";
+            var url = "https://api.artic.edu/api/v1/artworks/search"
+                .SetQueryParam("query[term][is_public_domain]", "true")
+                .SetQueryParam("limit", "2")
+                .SetQueryParam("fields", "id,title,image_id");
+
+            if (!string.IsNullOrEmpty(query))
+            {
+                url = url.SetQueryParam("q", query);
+            }
+
+            try
+            {
+                var response = await url
+                    .WithHeader("User-Agent", "PaperframeServer/1.0 (contact@paperframe.server)")
+                    .WithTimeout(6)
+                    .GetJsonAsync<ArtChicagoSearchResponse>();
+
+                if (response?.Data != null)
+                {
+                    var count = response.Data.Count(a => !string.IsNullOrEmpty(a.ImageId));
+                    return Ok(new { success = true, message = $"Valid configuration! Connected successfully and located public domain artworks (found {count} valid images in sample)." });
+                }
+                else
+                {
+                    return Ok(new { success = false, message = "Connected to Art Institute of Chicago, but search returned no data." });
+                }
+            }
+            catch (Exception ex)
+            {
+                return Ok(new { success = false, message = $"Failed to connect to Art Institute of Chicago API: {ex.Message}" });
+            }
+        }
+        catch (Exception ex)
+        {
+            return Ok(new { success = false, message = $"Validation failed: {ex.Message}" });
+        }
+    }
+
     [HttpPost("validate/homeassistant")]
     public async Task<IActionResult> ValidateHomeAssistant([FromBody] AppSettings.HomeAssistantConfig config)
     {
@@ -375,6 +422,20 @@ done
 
         [System.Text.Json.Serialization.JsonPropertyName("assetCount")]
         public int AssetCount { get; set; }
+    }
+
+    private class ArtChicagoSearchResponse
+    {
+        public ArtChicagoArtwork[] Data { get; set; } = Array.Empty<ArtChicagoArtwork>();
+    }
+
+    private class ArtChicagoArtwork
+    {
+        public int Id { get; set; }
+        public string Title { get; set; } = string.Empty;
+
+        [System.Text.Json.Serialization.JsonPropertyName("image_id")]
+        public string? ImageId { get; set; }
     }
 }
 

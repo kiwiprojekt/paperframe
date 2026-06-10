@@ -210,4 +210,72 @@ describe('Paperframe manager app.js', () => {
     expect(script).toContain('SERVICES_URL="http://custom.local"');
     close();
   });
+
+  it('renders device cards mapped to ArtChicago and toggles them', async () => {
+    const { document, api, close } = await loadApp();
+    api.setAppConfig({
+      devices: {
+        'kindle-art': { serviceName: 'ArtChicago', configId: 'art_home', disabled: false }
+      },
+      calendar: {},
+      immich: {},
+      artChicago: {
+        'art_home': { query: 'cats', fbinkPath: '/fbink', brightness: 10, contrast: 30 }
+      },
+      homeAssistant: {},
+      settings: {}
+    });
+
+    // Renders without errors
+    expect(() => api.renderDeviceCards()).not.toThrow();
+    expect(document.getElementById('devicesContainer').textContent).toContain('kindle-art');
+    expect(document.getElementById('devicesContainer').textContent).toContain('Art');
+
+    // Toggle disabled state
+    const toggle = document.querySelector('[data-action="toggle"]');
+    toggle.checked = false;
+    expect(() => toggle.onchange()).not.toThrow();
+    expect(api.getAppConfig().devices['kindle-art'].disabled).toBe(true);
+
+    close();
+  });
+
+  it('handles ArtChicago config operations', async () => {
+    const { document, api, close } = await loadApp();
+    api.setAppConfig({
+      devices: {},
+      calendar: {},
+      immich: {},
+      artChicago: {},
+      homeAssistant: {},
+      settings: {}
+    });
+
+    // Render empty UI
+    api.renderArtChicagoConfigUI();
+    expect(document.getElementById('artChicagoListBody').textContent).toContain('No Art Chicago configurations found');
+
+    // Add new config
+    api.openArtChicagoConfigModal();
+    document.getElementById('editArtChicagoConfigIdField').value = 'art_new';
+    document.getElementById('editArtChicagoQuery').value = 'dogs';
+    document.getElementById('editArtChicagoBrightness').value = '20';
+    document.getElementById('editArtChicagoContrast').value = '40';
+
+    api.saveArtChicagoConfigModalData();
+
+    const config = api.getAppConfig().artChicago['art_new'];
+    expect(config).toBeDefined();
+    expect(config.query).toBe('dogs');
+    expect(config.brightness).toBe(20);
+    expect(config.contrast).toBe(40);
+
+    // Edit config
+    api.openArtChicagoConfigModal('art_new');
+    document.getElementById('editArtChicagoQuery').value = 'landscapes';
+    api.saveArtChicagoConfigModalData();
+    expect(api.getAppConfig().artChicago['art_new'].query).toBe('landscapes');
+
+    close();
+  });
 });

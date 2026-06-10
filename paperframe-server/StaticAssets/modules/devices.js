@@ -34,9 +34,10 @@ export function renderDeviceCards() {
 
         let iconName  = 'tablet';
         let labelText = 'Device';
-        const svc = dev.serviceName.toLowerCase();
+        const svc = (dev.serviceName || "").toLowerCase();
         if (svc === 'calendar') { iconName = 'calendar-days'; labelText = 'Calendar'; }
         else if (svc === 'immich') { iconName = 'image';      labelText = 'Photo'; }
+        else if (svc === 'artchicago') { iconName = 'palette'; labelText = 'Art'; }
         else if (svc === 'meteo')  { iconName = 'cloud-sun';  labelText = 'Meteo'; }
 
         f('typeLabel').textContent = labelText;
@@ -125,6 +126,7 @@ export function populateModalConfigDropdown(selectedConfigId = null) {
     let options = [];
     if (service === 'Calendar') options = Object.keys(AppConfig.calendar || {});
     else if (service === 'Immich') options = Object.keys(AppConfig.immich || {});
+    else if (service === 'ArtChicago') options = Object.keys(AppConfig.artChicago || {});
 
     const saveBtn = document.querySelector('#deviceModal .modal-footer .btn-primary');
     if (options.length === 0) {

@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Paperframe Manager</title>
+    <link rel="icon" type="image/svg+xml" href="/assets/favicon.svg">
     <link rel="stylesheet" href="/assets/app.css">
     <!-- Lucide Icons CDN -->
     <script src="https://unpkg.com/lucide@latest"></script>
@@ -65,6 +66,12 @@
                 <button onclick="switchTab('immich')">
                     <i data-lucide="image"></i>
                     <span>Immich</span>
+                </button>
+            </li>
+            <li class="nav-item" data-tab="artchicago" id="nav-artchicago">
+                <button onclick="switchTab('artchicago')">
+                    <i data-lucide="palette"></i>
+                    <span>Art Institute</span>
                 </button>
             </li>
             <li class="nav-item" data-tab="homeassistant">
@@ -213,6 +220,44 @@
             </div>
         </div>
 
+        <!-- TAB: ARTCHICAGO CONFIGS -->
+        <div id="tab-artchicago" class="tab-panel">
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-title">
+                        <i data-lucide="palette"></i>
+                        <span>Manage Art Institute Configurations</span>
+                    </div>
+                    <button class="btn btn-primary" onclick="openArtChicagoConfigModal()">
+                        <i data-lucide="plus"></i> Add Config
+                    </button>
+                </div>
+
+                <div class="log-table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Config ID</th>
+                                <th>Search Query</th>
+                                <th>Orientation</th>
+                                <th>Rotation</th>
+                                <th>Brightness / Contrast</th>
+                                <th>Mapped Devices</th>
+                                <th style="text-align: right;">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="artChicagoListBody">
+                            <tr>
+                                <td colspan="7" style="text-align: center; color: var(--text-secondary); padding: 3rem;">
+                                    Loading Art Institute configurations...
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
         <!-- TAB: HOME ASSISTANT -->
         <div id="tab-homeassistant" class="tab-panel">
             <div class="card">
@@ -342,6 +387,18 @@
 
                         <div class="settings-integration-row">
                             <div class="settings-integration-info">
+                                <div class="settings-integration-name"><i data-lucide="palette"></i> Art Institute</div>
+                                <p class="settings-integration-desc">Dithered classical artwork streaming from Art Institute of Chicago</p>
+                            </div>
+                            <label class="device-toggle-btn" title="Enable / disable Art Institute integration">
+                                <input type="checkbox" id="settingsEnableArtChicago" checked onchange="this.closest('label').querySelector('.ha-toggle-label').textContent = this.checked ? 'Enabled' : 'Disabled'; markUnsavedChanges(); updateSidebarVisibility()">
+                                <span class="device-toggle-track"><span class="device-toggle-knob"></span></span>
+                                <span class="ha-toggle-label">Enabled</span>
+                            </label>
+                        </div>
+
+                        <div class="settings-integration-row">
+                            <div class="settings-integration-info">
                                 <div class="settings-integration-name"><i data-lucide="home"></i> Home Assistant</div>
                                 <p class="settings-integration-desc">Battery and check-in sync to HA helper entities</p>
                             </div>
@@ -462,6 +519,7 @@
                         <select id="modalDeviceService" onchange="populateModalConfigDropdown()">
                             <option value="Calendar">Calendar</option>
                             <option value="Immich">Immich (Photo Frame)</option>
+                            <option value="ArtChicago">Art Institute (Photo Frame)</option>
                         </select>
                     </div>
                     <div class="form-group">
@@ -700,6 +758,83 @@
         </div>
     </div>
 
+    <!-- ==================== ARTCHICAGO CONFIG EDITOR MODAL ==================== -->
+    <div class="modal" id="artChicagoConfigModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div class="modal-title" id="artChicagoConfigModalTitle">
+                    <i data-lucide="palette"></i>
+                    <span>Edit Art Institute Configuration</span>
+                </div>
+                <button class="modal-close" onclick="closeArtChicagoConfigModal()">
+                    <i data-lucide="x"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="editArtChicagoConfigId">
+                <div class="form-grid">
+                    <div class="form-group" id="editArtChicagoConfigIdGroup">
+                        <label>Config ID</label>
+                        <input type="text" id="editArtChicagoConfigIdField" placeholder="e.g. art_home" oninput="markUnsavedChanges()">
+                    </div>
+                    <div class="form-group">
+                        <label>Search Query (e.g. painting, cats, impressionism)</label>
+                        <input type="text" id="editArtChicagoQuery" placeholder="painting" oninput="markUnsavedChanges()">
+                        <span class="form-hint">Leave blank to load any public domain artworks randomly.</span>
+                    </div>
+                    <div class="form-group">
+                        <label>Fbink Path (on Kindle)</label>
+                        <input type="text" id="editArtChicagoFbink" oninput="markUnsavedChanges()">
+                    </div>
+                    <div class="form-group">
+                        <label>Orientation</label>
+                        <select id="editArtChicagoOrientation" onchange="markUnsavedChanges()">
+                            <option value="all">All (Aspect Ratios)</option>
+                            <option value="portrait">Portrait Only</option>
+                            <option value="landscape">Landscape Only</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Rotation</label>
+                        <select id="editArtChicagoRotation" onchange="markUnsavedChanges()">
+                            <option value="0">0° (No Rotation)</option>
+                            <option value="90">90° CW</option>
+                            <option value="180">180°</option>
+                            <option value="270">270° CCW</option>
+                        </select>
+                    </div>
+                    <div class="form-group full-width mt-md">
+                        <label>Brightness &amp; Contrast Adjustments</label>
+                        <div class="slider-group">
+                            <div class="slider-item">
+                                <label>Brightness: <span id="editArtChicagoBrightnessVal">10</span>%</label>
+                                <input type="range" id="editArtChicagoBrightness" min="-100" max="100" value="10"
+                                    oninput="document.getElementById('editArtChicagoBrightnessVal').innerText = this.value; markUnsavedChanges()" style="width: 100%;">
+                            </div>
+                            <div class="slider-item">
+                                <label>Contrast: <span id="editArtChicagoContrastVal">30</span>%</label>
+                                <input type="range" id="editArtChicagoContrast" min="-100" max="100" value="30"
+                                    oninput="document.getElementById('editArtChicagoContrastVal').innerText = this.value; markUnsavedChanges()" style="width: 100%;">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-danger" id="editArtChicagoDeleteBtn" onclick="deleteArtChicagoConfigFromModal()">
+                    <i data-lucide="trash-2"></i> Delete Config
+                </button>
+                <button class="btn btn-secondary" onclick="validateArtChicagoConfigFromModal()">
+                    <i data-lucide="check-square"></i> Validate Connection
+                </button>
+                <button class="btn btn-secondary" onclick="closeArtChicagoConfigModal()">Cancel</button>
+                <button class="btn btn-primary" onclick="saveArtChicagoConfigModalData()">
+                    <i data-lucide="check"></i> Apply Changes
+                </button>
+            </div>
+        </div>
+    </div>
+
     <!-- ==================== TEMPLATES ==================== -->
 
     <!-- Toast -->
@@ -833,6 +968,37 @@
         <tr>
             <td colspan="6" style="text-align: center; color: var(--text-secondary); padding: 3rem;">
                 No Immich configurations found. Click Add Config above to create one.
+            </td>
+        </tr>
+    </template>
+
+    <!-- ArtChicago table row -->
+    <template id="tpl-artchicago-row">
+        <tr>
+            <td class="font-serif" data-field="configId"></td>
+            <td><code class="code-chip" data-field="query"></code></td>
+            <td data-field="orientation"></td>
+            <td data-field="rotation"></td>
+            <td>B: <span style="font-weight:600;" data-field="brightness"></span> / C: <span style="font-weight:600;" data-field="contrast"></span></td>
+            <td><div style="display: flex; flex-wrap: wrap; gap: 0.25rem;" data-field="mappedDevices"></div></td>
+            <td style="text-align: right;">
+                <div style="display: flex; gap: 0.5rem; justify-content: flex-end;">
+                    <button class="btn btn-secondary btn-sm" data-action="edit">
+                        <i data-lucide="pencil"></i> Edit
+                    </button>
+                    <button class="btn btn-danger btn-sm" data-action="delete">
+                        <i data-lucide="trash-2"></i> Delete
+                    </button>
+                </div>
+            </td>
+        </tr>
+    </template>
+
+    <!-- ArtChicago empty state -->
+    <template id="tpl-artchicago-empty">
+        <tr>
+            <td colspan="7" style="text-align: center; color: var(--text-secondary); padding: 3rem;">
+                No Art Chicago configurations found. Click Add Config above to create one.
             </td>
         </tr>
     </template>

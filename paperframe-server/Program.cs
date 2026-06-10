@@ -80,6 +80,7 @@ public class Program
         builder.Services.AddSingleton<ICalendarLayoutService, CalendarLayoutService>();
         builder.Services.AddSingleton<IHomeAssistantService, HomeAssistantService>();
         builder.Services.AddSingleton<IImmichService, ImmichService>();
+        builder.Services.AddSingleton<IArtChicagoService, ArtChicagoService>();
         builder.Services.AddSingleton<IImageProcessingService, ImageProcessingService>();
         builder.Services.AddSingleton<IPaperframeLogService, PaperframeLogService>();
 

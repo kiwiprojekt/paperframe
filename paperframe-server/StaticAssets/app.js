@@ -4,6 +4,7 @@ import { AuthError, apiFetch, showLoginOverlay, hideLoginOverlay, checkAuth, sub
 import { timeAgo, renderDeviceCards, openDeviceModal, closeDeviceModal, populateModalConfigDropdown, saveDeviceModalData, deleteDevice } from './modules/devices.js';
 import { renderCalendarConfigUI, openCalendarConfigModal, closeCalendarConfigModal, renderEditCalIcalUrls, updateEditCalIcalUrlValue, addEditCalIcalUrlRow, removeEditCalIcalUrlRow, saveCalendarConfigModalData, deleteCalendarConfigFromModal, deleteCalendarConfig, validateCalendarConfigFromModal } from './modules/calendar.js';
 import { renderImmichConfigUI, openImmichConfigModal, closeImmichConfigModal, loadAlbumsForEditModal, selectEditModalDropdownAlbum, saveImmichConfigModalData, deleteImmichConfigFromModal, deleteImmichConfig, validateImmichConfigFromModal } from './modules/immich.js';
+import { renderArtChicagoConfigUI, openArtChicagoConfigModal, closeArtChicagoConfigModal, saveArtChicagoConfigModalData, deleteArtChicagoConfigFromModal, deleteArtChicagoConfig, validateArtChicagoConfigFromModal } from './modules/artchicago.js';
 import { updateSidebarVisibility, validateHomeAssistantConnection } from './modules/homeassistant.js';
 import { openLauncherModal, closeLauncherModal, updateLauncherScriptPreview, downloadConfiguredLauncher, setLauncherDeviceId, launcherDeviceId } from './modules/launcher.js';
 
@@ -38,6 +39,11 @@ window.selectEditModalDropdownAlbum = selectEditModalDropdownAlbum;
 window.validateImmichConfigFromModal = validateImmichConfigFromModal;
 window.saveImmichConfigModalData = saveImmichConfigModalData;
 window.deleteImmichConfigFromModal = deleteImmichConfigFromModal;
+window.openArtChicagoConfigModal = openArtChicagoConfigModal;
+window.closeArtChicagoConfigModal = closeArtChicagoConfigModal;
+window.validateArtChicagoConfigFromModal = validateArtChicagoConfigFromModal;
+window.saveArtChicagoConfigModalData = saveArtChicagoConfigModalData;
+window.deleteArtChicagoConfigFromModal = deleteArtChicagoConfigFromModal;
 
 // Initialize app on load
 window.onload = async () => {
@@ -97,6 +103,9 @@ if (globalThis.__PAPERFRAME_TEST__) {
         openImmichConfigModal,
         loadAlbumsForEditModal,
         saveImmichConfigModalData,
+        renderArtChicagoConfigUI,
+        openArtChicagoConfigModal,
+        saveArtChicagoConfigModalData,
         updateSidebarVisibility,
         getServerUrl,
         updateLauncherScriptPreview,

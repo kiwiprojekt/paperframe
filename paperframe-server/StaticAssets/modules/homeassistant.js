@@ -4,9 +4,10 @@ import { showToast, switchTab } from './ui-utils.js';
 export function updateSidebarVisibility() {
     const calEnabled = document.getElementById('settingsEnableCalendar')?.checked ?? true;
     const immEnabled = document.getElementById('settingsEnableImmich')?.checked   ?? true;
+    const artEnabled = document.getElementById('settingsEnableArtChicago')?.checked ?? true;
     const haEnabled  = document.getElementById('settingsEnableHa')?.checked       ?? true;
 
-    const map = { calendar: calEnabled, immich: immEnabled, homeassistant: haEnabled };
+    const map = { calendar: calEnabled, immich: immEnabled, artchicago: artEnabled, homeassistant: haEnabled };
     Object.entries(map).forEach(([tab, enabled]) => {
         const item = document.querySelector(`.nav-item[data-tab="${tab}"]`);
         if (item) item.style.display = enabled ? '' : 'none';
