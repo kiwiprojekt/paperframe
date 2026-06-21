@@ -142,4 +142,117 @@ public class ArtChicagoServiceTests
         image.Format = MagickFormat.Jpeg;
         return image.ToByteArray();
     }
+
+    [Fact]
+    public async Task GetImage_retries_on_download_failure_with_next_artwork()
+    {
+        using var httpTest = new HttpTest();
+        var rawImageBytes = CreateImageBytes(100, 80);
+
+        // Search responses (initial + background refill)
+        var searchResponses = new Queue<object>(new object[]
+        {
+            new {
+                Data = new[]
+                {
+                    new { Id = 111, Title = "Failing Artwork 1", image_id = "fail-1", Thumbnail = new { Width = 100, Height = 80 } },
+                    new { Id = 222, Title = "Failing Artwork 2", image_id = "fail-2", Thumbnail = new { Width = 100, Height = 80 } },
+                    new { Id = 333, Title = "Successful Artwork", image_id = "success-3", Thumbnail = new { Width = 100, Height = 80 } }
+                }
+            },
+            new {
+                Data = new[]
+                {
+                    new { Id = 444, Title = "Background Cat", image_id = "bg-cat", Thumbnail = new { Width = 100, Height = 80 } }
+                }
+            }
+        });
+
+        httpTest.ForCallsTo("*/artworks/search*")
+            .RespondWith(() => {
+                var resp = searchResponses.Count > 0 ? searchResponses.Dequeue() : new { Data = Array.Empty<object>() };
+                return new StringContent(System.Text.Json.JsonSerializer.Serialize(resp), System.Text.Encoding.UTF8, "application/json");
+            });
+
+        // 1. Timeouts for fail-1 and fail-2
+        httpTest.ForCallsTo("*/iiif/2/fail-*")
+            .RespondWith("Gateway Timeout", 504);
+
+        // 2. Success for success-3
+        httpTest.ForCallsTo("*/iiif/2/success-3/*")
+            .RespondWith(() => new ByteArrayContent(rawImageBytes), 200);
+
+        var service = new ArtChicagoService(new ImageProcessingService());
+
+        var result = await service.GetImage(new AppSettings.ArtChicagoConfig
+        {
+            Query = "cats",
+            FbinkPath = "/mnt/us/libkh/bin/fbink"
+        }, "kindle-c", 50, 40);
+
+        // Assert that the processed output has the correct dimensions (signaling a successful third attempt)
+        using var processed = new MagickImage(result);
+        processed.Width.Should().Be(50);
+        processed.Height.Should().Be(40);
+
+        // Assert HTTP endpoints were queried correctly
+        var calls = httpTest.CallLog.ToList();
+        calls.Should().HaveCountGreaterThanOrEqualTo(4);
+
+        // Verify the sequence of URLs called:
+        // 1. Search
+        calls.Any(c => c.Request.Url.ToString().Contains("api.artic.edu/api/v1/artworks/search")).Should().BeTrue();
+        // 2. First download attempt (fail-1)
+        calls.Any(c => c.Request.Url.ToString().Contains("iiif/2/fail-1/")).Should().BeTrue();
+        // 3. Second download attempt (fail-2)
+        calls.Any(c => c.Request.Url.ToString().Contains("iiif/2/fail-2/")).Should().BeTrue();
+        // 4. Third download attempt (success-3)
+        calls.Any(c => c.Request.Url.ToString().Contains("iiif/2/success-3/")).Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task GetImage_throws_exception_if_all_download_attempts_fail()
+    {
+        using var httpTest = new HttpTest();
+
+        // Search responses
+        var searchResponses = new Queue<object>(new object[]
+        {
+            new {
+                Data = new[]
+                {
+                    new { Id = 111, Title = "Failing Artwork 1", image_id = "fail-1", Thumbnail = new { Width = 100, Height = 80 } },
+                    new { Id = 222, Title = "Failing Artwork 2", image_id = "fail-2", Thumbnail = new { Width = 100, Height = 80 } },
+                    new { Id = 333, Title = "Failing Artwork 3", image_id = "fail-3", Thumbnail = new { Width = 100, Height = 80 } }
+                }
+            },
+            new {
+                Data = new[]
+                {
+                    new { Id = 444, Title = "Background Cat", image_id = "bg-cat", Thumbnail = new { Width = 100, Height = 80 } }
+                }
+            }
+        });
+
+        httpTest.ForCallsTo("*/artworks/search*")
+            .RespondWith(() => {
+                var resp = searchResponses.Count > 0 ? searchResponses.Dequeue() : new { Data = Array.Empty<object>() };
+                return new StringContent(System.Text.Json.JsonSerializer.Serialize(resp), System.Text.Encoding.UTF8, "application/json");
+            });
+
+        // Timeout for all fail images
+        httpTest.ForCallsTo("*/iiif/2/fail-*")
+            .RespondWith("Gateway Timeout", 504);
+
+        var service = new ArtChicagoService(new ImageProcessingService());
+
+        var act = async () => await service.GetImage(new AppSettings.ArtChicagoConfig
+        {
+            Query = "cats",
+            FbinkPath = "/mnt/us/libkh/bin/fbink"
+        }, "kindle-d", 50, 40);
+
+        var exception = await act.Should().ThrowAsync<InvalidOperationException>();
+        exception.WithMessage("ArtChicago queue is empty and refill failed.");
+    }
 }

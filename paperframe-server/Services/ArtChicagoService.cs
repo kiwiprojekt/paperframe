@@ -17,14 +17,15 @@ public class ArtChicagoService : IArtChicagoService
         _imageProcessingService = imageProcessingService;
     }
 
-    private class ArtworkMetadata
+    private class ArtworkImage
     {
         public string Id { get; set; } = string.Empty;
         public string Title { get; set; } = string.Empty;
         public string ImageId { get; set; } = string.Empty;
+        public byte[] RawBytes { get; set; } = Array.Empty<byte>();
     }
 
-    private static readonly ConcurrentDictionary<string, Queue<ArtworkMetadata>> _artworkQueuesPerDevice = new();
+    private static readonly ConcurrentDictionary<string, Queue<ArtworkImage>> _artworkQueuesPerDevice = new();
     private static readonly object _lock = new();
 
     private async Task RefillQueue(string deviceId, AppSettings.ArtChicagoConfig config)
@@ -57,7 +58,7 @@ public class ArtChicagoService : IArtChicagoService
 
                 if (response?.Data != null && response.Data.Length > 0)
                 {
-                    var validArtworks = response.Data
+                    var candidates = response.Data
                         .Where(a => !string.IsNullOrEmpty(a.ImageId))
                         .Where(a =>
                         {
@@ -80,28 +81,54 @@ public class ArtChicagoService : IArtChicagoService
                             }
                             return true;
                         })
-                        .Select(a => new ArtworkMetadata
-                        {
-                            Id = a.Id.ToString(),
-                            Title = a.Title,
-                            ImageId = a.ImageId!
-                        })
                         .ToList();
 
-                    if (validArtworks.Count > 0)
+                    if (candidates.Count > 0)
                     {
-                        var queue = _artworkQueuesPerDevice.GetOrAdd(deviceId, _ => new Queue<ArtworkMetadata>());
-                        lock (_lock)
+                        var queue = _artworkQueuesPerDevice.GetOrAdd(deviceId, _ => new Queue<ArtworkImage>());
+                        
+                        var downloadTasks = candidates.Select(async artwork =>
                         {
-                            foreach (var art in validArtworks)
+                            var iiifUrl = $"https://www.artic.edu/iiif/2/{artwork.ImageId}/full/!843,843/0/default.jpg";
+                            try
                             {
-                                if (!queue.Any(q => q.ImageId == art.ImageId))
+                                byte[] bytes = await iiifUrl
+                                    .WithHeader("User-Agent", "PaperframeServer/1.0 (contact@paperframe.server)")
+                                    .WithHeader("AIC-User-Agent", "PaperframeServer (contact@paperframe.server)")
+                                    .GetBytesAsync();
+                                
+                                return new ArtworkImage
                                 {
-                                    queue.Enqueue(art);
+                                    Id = artwork.Id.ToString(),
+                                    Title = artwork.Title,
+                                    ImageId = artwork.ImageId!,
+                                    RawBytes = bytes
+                                };
+                            }
+                            catch (Exception ex)
+                            {
+                                Console.WriteLine($"Failed to pre-download image for artwork '{artwork.Title}' ({artwork.ImageId}): {ex.Message}");
+                                return null;
+                            }
+                        });
+
+                        var results = await Task.WhenAll(downloadTasks);
+                        var validImages = results.Where(r => r != null && r!.RawBytes.Length > 0).Cast<ArtworkImage>().ToList();
+
+                        if (validImages.Count > 0)
+                        {
+                            lock (_lock)
+                            {
+                                foreach (var art in validImages)
+                                {
+                                    if (!queue.Any(q => q.ImageId == art.ImageId))
+                                    {
+                                        queue.Enqueue(art);
+                                    }
                                 }
                             }
+                            return; // Successfully refilled!
                         }
-                        return; // Successfully refilled!
                     }
                 }
             }
@@ -111,14 +138,14 @@ public class ArtChicagoService : IArtChicagoService
             }
         }
 
-        throw new InvalidOperationException("Failed to retrieve valid public domain artworks from the Art Institute of Chicago API.");
+        throw new InvalidOperationException("Failed to retrieve and pre-download valid public domain artworks from the Art Institute of Chicago API.");
     }
 
     public async Task<byte[]> GetImage(AppSettings.ArtChicagoConfig config, string deviceId, uint x, uint y)
     {
-        var queue = _artworkQueuesPerDevice.GetOrAdd(deviceId, _ => new Queue<ArtworkMetadata>());
+        var queue = _artworkQueuesPerDevice.GetOrAdd(deviceId, _ => new Queue<ArtworkImage>());
 
-        ArtworkMetadata? artwork = null;
+        ArtworkImage? artwork = null;
 
         lock (_lock)
         {
@@ -133,13 +160,20 @@ public class ArtChicagoService : IArtChicagoService
         {
             if (artwork == null)
             {
-                await RefillQueue(deviceId, config);
-                lock (_lock)
+                try
                 {
-                    if (queue.Count > 0)
+                    await RefillQueue(deviceId, config);
+                    lock (_lock)
                     {
-                        artwork = queue.Dequeue();
+                        if (queue.Count > 0)
+                        {
+                            artwork = queue.Dequeue();
+                        }
                     }
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Foreground ArtChicago queue refill failed: {ex.Message}");
                 }
             }
             else
@@ -164,22 +198,7 @@ public class ArtChicagoService : IArtChicagoService
             throw new InvalidOperationException("ArtChicago queue is empty and refill failed.");
         }
 
-        var iiifUrl = $"https://www.artic.edu/iiif/2/{artwork.ImageId}/full/!843,843/0/default.jpg";
-        
-        byte[] imageBytes;
-        try
-        {
-            imageBytes = await iiifUrl
-                .WithHeader("User-Agent", "PaperframeServer/1.0 (contact@paperframe.server)")
-                .WithHeader("AIC-User-Agent", "PaperframeServer (contact@paperframe.server)")
-                .GetBytesAsync();
-        }
-        catch (Exception ex)
-        {
-            throw new InvalidOperationException($"Failed to download image for artwork '{artwork.Title}' ({artwork.ImageId}): {ex.Message}", ex);
-        }
-
-        return _imageProcessingService.ResizeCropAndAdjust(imageBytes, x, y, config.Brightness, config.Contrast, config.Rotation);
+        return _imageProcessingService.ResizeCropAndAdjust(artwork.RawBytes, x, y, config.Brightness, config.Contrast, config.Rotation);
     }
 
     private class ArtChicagoSearchResponse
