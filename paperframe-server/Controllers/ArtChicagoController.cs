@@ -6,6 +6,7 @@ using System;
 using System.Linq;
 using System.Threading.Tasks;
 using System.Collections.Generic;
+using paperframe_server.Helpers;
 
 namespace paperframe_server.Controllers;
 
@@ -65,6 +66,9 @@ fi
 
 $FBINK --image file=image.jpeg,dither
 ";
+            var sleepTime = DeviceHelper.GetSleepTimeSeconds(deviceId, _optionsMonitor.CurrentValue);
+            script += $"\n\necho \"SLEEP_TIME_S={sleepTime}\" > sleep_time.env\n";
+
             _logService.LogCheckIn(deviceId, battery, screenRes, "ArtChicago", configId, "Success", "ArtChicago launcher script compiled successfully.");
 
             return script;
@@ -73,6 +77,7 @@ $FBINK --image file=image.jpeg,dither
         {
             _logService.LogCheckIn(deviceId, battery, screenRes, "ArtChicago", configId, "Error", $"Layout compile failed: {ex.Message}");
 
+            var sleepTime = DeviceHelper.GetSleepTimeSeconds(deviceId, _optionsMonitor.CurrentValue);
             return $@"#!/bin/sh
 # ARTCHICAGO COMPILE ERROR RUNTIME FALLBACK
 FBINK=""/mnt/us/libkh/bin/fbink""
@@ -80,6 +85,8 @@ $FBINK -q -k
 $FBINK -q ""ARTCHICAGO COMPILE ERROR"" -t size=20,top=200 -O -m -C GRAY9
 $FBINK -q ""Config ID: {ShellEscape(configId)}"" -t size=12,top=260 -O -m -C GRAY6
 $FBINK -q ""Error: {ShellEscape(ex.Message)}"" -t size=10,top=320 -O -m -C GRAY3
+
+echo ""SLEEP_TIME_S={sleepTime}"" > sleep_time.env
 ";
         }
     }

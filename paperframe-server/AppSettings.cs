@@ -31,6 +31,7 @@ public class AppSettings
         public string? ServiceName { get; set; }
         public string? ConfigId { get; set; }
         public bool? Disabled { get; set; }
+        public string? WakeupCron { get; set; }
     }
 
     public class CalendarConfig

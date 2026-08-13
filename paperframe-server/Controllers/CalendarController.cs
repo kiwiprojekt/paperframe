@@ -5,6 +5,7 @@ using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using paperframe_server.Services;
+using paperframe_server.Helpers;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
 
@@ -79,6 +80,8 @@ public class CalendarController : ControllerBase
             };
 
             var script = _calendarLayoutService.CompileScript(context);
+            var sleepTime = DeviceHelper.GetSleepTimeSeconds(deviceId, _optionsMonitor.CurrentValue);
+            script += $"\n\necho \"SLEEP_TIME_S={sleepTime}\" > sleep_time.env\n";
 
             // Log success check-in
             _logService.LogCheckIn(deviceId, battery, screenRes, "Calendar", configId, "Success", "Calendar rendering script generated successfully.");
@@ -90,6 +93,7 @@ public class CalendarController : ControllerBase
             // Log compile failure
             _logService.LogCheckIn(deviceId, battery, screenRes, "Calendar", configId, "Error", $"Layout compile failed: {ex.Message}");
 
+            var sleepTime = DeviceHelper.GetSleepTimeSeconds(deviceId, _optionsMonitor.CurrentValue);
             // Safe E-Ink diagnostic script
             return $@"#!/bin/sh
 # CALENDAR COMPILE ERROR RUNTIME FALLBACK
@@ -98,6 +102,8 @@ $FBINK -q -k
 $FBINK -q ""CALENDAR COMPILE ERROR"" -t size=20,top=200 -O -m -C GRAY9
 $FBINK -q ""Config ID: {ShellEscape(configId)}"" -t size=12,top=260 -O -m -C GRAY6
 $FBINK -q ""Error: {ShellEscape(ex.Message)}"" -t size=10,top=320 -O -m -C GRAY3
+
+echo ""SLEEP_TIME_S={sleepTime}"" > sleep_time.env
 ";
         }
     }

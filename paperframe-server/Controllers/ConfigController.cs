@@ -12,6 +12,8 @@ using paperframe_server.Services;
 using System.Globalization;
 using Microsoft.AspNetCore.Http;
 using System.Collections.Generic;
+using Cronos;
+using paperframe_server.Helpers;
 
 namespace paperframe_server.Controllers;
 
@@ -32,6 +34,7 @@ public class ConfigController : ControllerBase
         _optionsMonitor = optionsMonitor;
         _logService = logService;
     }
+
 
     [HttpGet]
     public IActionResult GetConfig()
@@ -55,6 +58,20 @@ public class ConfigController : ControllerBase
             if (newSettings == null)
             {
                 return BadRequest(new { message = "Invalid configuration data." });
+            }
+
+            if (newSettings.Devices != null)
+            {
+                foreach (var device in newSettings.Devices)
+                {
+                    if (!string.IsNullOrEmpty(device.Value.WakeupCron))
+                    {
+                        if (!DeviceHelper.TryParseCron(device.Value.WakeupCron, out var error))
+                        {
+                            return BadRequest(new { message = $"Invalid cron expression for device {device.Key}: {error}" });
+                        }
+                    }
+                }
             }
 
             JsonNode node;
@@ -322,7 +339,7 @@ public class ConfigController : ControllerBase
     }
 
     [HttpGet("download-client/{deviceId}")]
-    public IActionResult DownloadClientScript(string deviceId, [FromQuery] int sleepSeconds = 7200)
+    public IActionResult DownloadClientScript(string deviceId)
     {
         var config = _optionsMonitor.CurrentValue;
         if (config.Devices == null || !config.Devices.TryGetValue(deviceId, out var deviceConfig))
@@ -342,7 +359,7 @@ public class ConfigController : ControllerBase
 
 # -------- Configuration --------
 DEVICE_ID=""{deviceId}"" 
-SLEEP_TIME_S={sleepSeconds}
+SLEEP_TIME_S=""7200""
 SERVICES_URL=""{serverUrl}""
 # -------------------------------
 SCREEN_RES=""$(eips -i | grep 'xres:' | tr -d ' xres:' | tr 'y' ',')""
@@ -370,10 +387,11 @@ while true; do
 
     #if download failed
     if [ $wget_result -ne 0 ]; then
+        wget -qO- ""$SERVICES_URL/api/logs/client_error?device_id=$DEVICE_ID&msg=wget_failed""
         #reenable screensaver 
         lipc-set-prop com.lab126.powerd preventScreenSaver 0
         # exit
-        return 1;
+        exit 1;
     fi
 
     # clear display
@@ -385,13 +403,21 @@ while true; do
     export DEVICE_ID SCREEN_RES SERVICES_URL BATT_PERCENT
 
     # run downloaded script
-    ./script.sh; script_result=$?
+    ./script.sh > script_out.log 2> script_err.log; script_result=$?
     
     if [ $script_result -ne 0 ]; then
+        # read error log and send
+        err_snippet=$(head -c 100 script_err.log | tr -d '\n\r' | sed 's/ /%20/g' | sed 's/&/%26/g')
+        wget -qO- ""$SERVICES_URL/api/logs/client_error?device_id=$DEVICE_ID&msg=script_failed_$err_snippet""
         #reenable screensaver 
         lipc-set-prop com.lab126.powerd preventScreenSaver 0
         # exit
-        return 1;
+        exit 1;
+    fi
+
+    if [ -f sleep_time.env ]; then
+        source sleep_time.env
+        rm sleep_time.env
     fi
 
     sleep 3

@@ -43,6 +43,30 @@ public class ConfigControllerTests
     }
 
     [Fact]
+    public void SaveConfig_rejects_invalid_cron_expression()
+    {
+        var tempDir = Directory.CreateTempSubdirectory("paperframe-config-test-");
+        var configPath = Path.Combine(tempDir.FullName, "appsettings.json");
+        File.WriteAllText(configPath, "{ }");
+        var controller = NewController(configPath, new AppSettings());
+
+        var result = controller.SaveConfig(new AppSettings
+        {
+            Devices = new Dictionary<string, AppSettings.DeviceConfig>
+            {
+                ["kindle-a"] = new() { WakeupCron = "invalid_cron_string" }
+            }
+        });
+
+        result.Should().BeOfType<BadRequestObjectResult>();
+        var badRequest = (BadRequestObjectResult)result;
+        var message = JsonSerializer.Deserialize<JsonElement>(JsonSerializer.Serialize(badRequest.Value))
+            .GetProperty("message").GetString();
+        message.Should().StartWith("Invalid cron expression for device kindle-a:");
+    }
+
+
+    [Fact]
     public async Task ValidateCalendar_rejects_invalid_culture_before_fetching_url()
     {
         using var httpTest = new HttpTest();
@@ -138,7 +162,7 @@ public class ConfigControllerTests
     }
 
     [Fact]
-    public void DownloadClientScript_uses_request_origin_device_id_and_sleep_seconds()
+    public void DownloadClientScript_uses_request_origin_and_device_id()
     {
         var controller = NewController(options: new AppSettings
         {
@@ -159,12 +183,12 @@ public class ConfigControllerTests
             }
         };
 
-        var result = controller.DownloadClientScript("kindle-a", sleepSeconds: 123);
+        var result = controller.DownloadClientScript("kindle-a");
 
         var file = result.Should().BeOfType<FileContentResult>().Subject;
         var script = Encoding.UTF8.GetString(file.FileContents);
         script.Should().Contain("DEVICE_ID=\"kindle-a\"");
-        script.Should().Contain("SLEEP_TIME_S=123");
+        script.Should().Contain("SLEEP_TIME_S=\"7200\"");
         script.Should().Contain("SERVICES_URL=\"https://paperframe.local:8443\"");
     }
 

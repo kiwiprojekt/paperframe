@@ -528,6 +528,19 @@
                             <!-- Populated dynamically based on service selection -->
                         </select>
                     </div>
+                    <div class="form-group" style="margin-top: 0.5rem; border-top: 1px solid var(--border-color); padding-top: 1.25rem;">
+                        <label for="modalDeviceWakeupCron">Wakeup Schedule (Cron)</label>
+                        <select id="modalDeviceWakeupCronPreset" onchange="handleCronPresetChange()">
+                            <option value="">(No schedule configured)</option>
+                            <option value="0 * * * *">Hourly (0 * * * *)</option>
+                            <option value="0 */2 * * *">Every 2 hours (0 */2 * * *)</option>
+                            <option value="0 8,12,18 * * *">Morning/Noon/Evening (0 8,12,18 * * *)</option>
+                            <option value="0 8 * * *">Daily at 8am (0 8 * * *)</option>
+                            <option value="custom">Custom...</option>
+                        </select>
+                        <input type="text" id="modalDeviceWakeupCron" placeholder="e.g. */30 * * * *" style="display: none; margin-top: 0.5rem;" oninput="markUnsavedChanges()">
+                        <span class="form-hint" style="margin-top: 0.5rem; display: block;">The device will calculate delay to next matching time and deep sleep for that duration. Without a valid schedule, the device will exit its loop.</span>
+                    </div>
 
                 </div>
             </div>

@@ -101,12 +101,35 @@ export function openDeviceModal(id = null) {
         const dev          = AppConfig.devices[id];
         serviceSelect.value = dev.serviceName;
         populateModalConfigDropdown(dev.configId);
+
+        const cronPreset = document.getElementById('modalDeviceWakeupCronPreset');
+        const cronInput = document.getElementById('modalDeviceWakeupCron');
+        if (dev.wakeupCron) {
+            const presets = ["0 * * * *", "0 */2 * * *", "0 8,12,18 * * *", "0 8 * * *"];
+            if (presets.includes(dev.wakeupCron)) {
+                cronPreset.value = dev.wakeupCron;
+                cronInput.style.display = 'none';
+                cronInput.value = '';
+            } else {
+                cronPreset.value = 'custom';
+                cronInput.style.display = 'block';
+                cronInput.value = dev.wakeupCron;
+            }
+        } else {
+            cronPreset.value = '';
+            cronInput.style.display = 'none';
+            cronInput.value = '';
+        }
     } else {
         titleEl.innerText    = 'Register New Paperframe Device';
         idInput.value        = '';
         idInput.disabled     = false;
         serviceSelect.value  = 'Calendar';
         populateModalConfigDropdown();
+
+        document.getElementById('modalDeviceWakeupCronPreset').value = '';
+        document.getElementById('modalDeviceWakeupCron').style.display = 'none';
+        document.getElementById('modalDeviceWakeupCron').value = '';
     }
 
     document.getElementById('deviceModal').classList.add('active');
@@ -116,6 +139,18 @@ export function openDeviceModal(id = null) {
 export function closeDeviceModal() {
     document.getElementById('deviceModal').classList.remove('active');
     editingDeviceId = null;
+}
+
+export function handleCronPresetChange() {
+    const preset = document.getElementById('modalDeviceWakeupCronPreset').value;
+    const customInput = document.getElementById('modalDeviceWakeupCron');
+    if (preset === 'custom') {
+        customInput.style.display = 'block';
+    } else {
+        customInput.style.display = 'none';
+        customInput.value = '';
+    }
+    markUnsavedChanges(true);
 }
 
 export function populateModalConfigDropdown(selectedConfigId = null) {
@@ -155,11 +190,31 @@ export function saveDeviceModalData() {
         return;
     }
 
+    const cronPreset = document.getElementById('modalDeviceWakeupCronPreset').value;
+    const cronCustom = document.getElementById('modalDeviceWakeupCron').value.trim();
+    let finalCron = '';
+    
+    if (cronPreset === 'custom') {
+        if (!cronCustom) {
+            alert('Please provide a valid cron expression.');
+            return;
+        }
+        // Basic syntax validation (5 parts)
+        if (cronCustom.split(' ').length !== 5) {
+            alert('Cron expression must have exactly 5 parts (e.g., "0 * * * *").');
+            return;
+        }
+        finalCron = cronCustom;
+    } else {
+        finalCron = cronPreset;
+    }
+
     AppConfig.devices        = AppConfig.devices || {};
     AppConfig.devices[deviceId] = {
         serviceName: serviceSelect.value,
         configId:    configSelect.value,
-        disabled:    editingDeviceId ? (AppConfig.devices[editingDeviceId]?.disabled ?? false) : false
+        disabled:    editingDeviceId ? (AppConfig.devices[editingDeviceId]?.disabled ?? false) : false,
+        wakeupCron:  finalCron || null
     };
 
     closeDeviceModal();

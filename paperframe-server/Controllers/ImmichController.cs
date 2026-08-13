@@ -6,6 +6,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using paperframe_server.Helpers;
 
 namespace paperframe_server.Controllers;
 
@@ -65,6 +66,9 @@ fi
 
 $FBINK --image file=image.jpeg,dither
 ";
+            var sleepTime = DeviceHelper.GetSleepTimeSeconds(deviceId, _optionsMonitor.CurrentValue);
+            script += $"\n\necho \"SLEEP_TIME_S={sleepTime}\" > sleep_time.env\n";
+
             // Log success check-in
             _logService.LogCheckIn(deviceId, battery, screenRes, "Immich", configId, "Success", "Immich launcher script compiled successfully.");
 
@@ -75,6 +79,7 @@ $FBINK --image file=image.jpeg,dither
             // Log compile failure
             _logService.LogCheckIn(deviceId, battery, screenRes, "Immich", configId, "Error", $"Layout compile failed: {ex.Message}");
 
+            var sleepTime = DeviceHelper.GetSleepTimeSeconds(deviceId, _optionsMonitor.CurrentValue);
             // Safe E-Ink diagnostic script
             return $@"#!/bin/sh
 # IMMICH COMPILE ERROR RUNTIME FALLBACK
@@ -83,6 +88,8 @@ $FBINK -q -k
 $FBINK -q ""IMMICH COMPILE ERROR"" -t size=20,top=200 -O -m -C GRAY9
 $FBINK -q ""Config ID: {ShellEscape(configId)}"" -t size=12,top=260 -O -m -C GRAY6
 $FBINK -q ""Error: {ShellEscape(ex.Message)}"" -t size=10,top=320 -O -m -C GRAY3
+
+echo ""SLEEP_TIME_S={sleepTime}"" > sleep_time.env
 ";
         }
     }

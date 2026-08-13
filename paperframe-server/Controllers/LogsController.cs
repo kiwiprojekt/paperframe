@@ -16,4 +16,11 @@ public class LogsController : ControllerBase
 
     [HttpGet]
     public IActionResult GetLogs() => Ok(_logService.GetLogs());
+
+    [HttpGet("client_error")]
+    public IActionResult LogClientError([FromQuery] string device_id, [FromQuery] string msg)
+    {
+        _logService.LogCheckIn(device_id, null, "unknown", "Client", "None", "Error", msg);
+        return Ok();
+    }
 }
