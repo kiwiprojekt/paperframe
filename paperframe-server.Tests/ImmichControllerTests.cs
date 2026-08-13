@@ -5,38 +5,35 @@ using NSubstitute;
 using paperframe_server.Controllers;
 using paperframe_server.Services;
 using paperframe_server.Tests.TestSupport;
+using System;
+using System.IO;
+using System.Threading.Tasks;
+using System.Collections.Generic;
 
 namespace paperframe_server.Tests;
 
 public class ImmichControllerTests
 {
     [Fact]
-    public void Get_generates_launcher_script_and_logs_success()
+    public void Get_generates_launcher_script()
     {
-        var logService = Substitute.For<IPaperframeLogService>();
-        var controller = NewController(logService: logService);
-        controller.Request.Headers["device_id"] = "kindle-a";
-        controller.Request.Headers["battery"] = "77";
+        var controller = NewController();
 
         var script = controller.Get("frame");
 
         script.Should().Contain("IMAGE_URL=$SERVICES_URL\"/immich/frame/image\"");
         script.Should().Contain("FBINK=\"/mnt/us/libkh/bin/fbink\"");
-        logService.Received().LogCheckIn("kindle-a", 77, "758,1024", "Immich", "frame", "Success", Arg.Any<string>());
     }
 
     [Fact]
-    public void Get_returns_diagnostic_script_for_missing_config()
+    public void Get_throws_when_config_is_missing()
     {
-        var logService = Substitute.For<IPaperframeLogService>();
-        var controller = NewController(options: new AppSettings { Immich = new() }, logService: logService);
-        controller.Request.Headers["device_id"] = "kindle-a";
+        var controller = NewController(options: new AppSettings { Immich = new() });
 
-        var script = controller.Get("missing");
+        var act = () => controller.Get("missing");
 
-        script.Should().Contain("IMMICH COMPILE ERROR");
-        script.Should().Contain("Config ID: missing");
-        logService.Received().LogCheckIn("kindle-a", null, "758,1024", "Immich", "missing", "Error", Arg.Any<string>());
+        act.Should().Throw<KeyNotFoundException>()
+            .WithMessage("Layout configuration 'missing' is not defined in Immich configs.");
     }
 
     [Fact]
@@ -48,14 +45,18 @@ public class ImmichControllerTests
             .Returns(imageBytes);
         var logService = Substitute.For<IPaperframeLogService>();
         var controller = NewController(immichService, logService: logService);
+        controller.Request.Headers["device_id"] = "kindle-a";
+        controller.Request.Headers["screen_res"] = "600,800";
         controller.Request.Headers["battery"] = "12";
         controller.Response.Body = new MemoryStream();
 
-        await controller.GetImage("frame", screenRes: "600,800", deviceId: "kindle-a");
+        await controller.GetImage("frame");
 
         ((MemoryStream)controller.Response.Body).ToArray().Should().Equal(imageBytes);
         await immichService.Received().GetImage(Arg.Any<AppSettings.ImmichConfig>(), "kindle-a", 600, 800);
-        logService.Received().LogCheckIn("kindle-a", 12, "600,800", "ImmichImage", "frame", "Success", Arg.Any<string>());
+        logService.Received().LogCheckIn(Arg.Is<CheckInRequest>(r => 
+            r.DeviceId == "kindle-a" && r.Battery == 12 && r.ScreenResolution == "600,800" && 
+            r.Service == "ImmichImage" && r.ConfigId == "frame" && r.Status == "Success"));
     }
 
     [Fact]
@@ -65,9 +66,11 @@ public class ImmichControllerTests
         immichService.GetImage(Arg.Any<AppSettings.ImmichConfig>(), "kindle-a", 758, 1024)
             .Returns(new byte[] { 1 });
         var controller = NewController(immichService);
+        controller.Request.Headers["device_id"] = "kindle-a";
+        controller.Request.Headers["screen_res"] = "invalid";
         controller.Response.Body = new MemoryStream();
 
-        await controller.GetImage("frame", screenRes: "invalid", deviceId: "kindle-a");
+        await controller.GetImage("frame");
 
         await immichService.Received().GetImage(Arg.Any<AppSettings.ImmichConfig>(), "kindle-a", 758, 1024);
     }
@@ -77,13 +80,16 @@ public class ImmichControllerTests
     {
         var logService = Substitute.For<IPaperframeLogService>();
         var controller = NewController(logService: logService);
+        controller.Request.Headers["screen_res"] = "600,800";
         controller.Response.Body = new MemoryStream();
 
-        var act = () => controller.GetImage("frame", screenRes: "600,800", deviceId: null);
+        var act = () => controller.GetImage("frame");
 
         await act.Should().ThrowAsync<ArgumentException>()
             .WithMessage("Missing 'device_id' header in photo request*");
-        logService.Received().LogCheckIn("unknown", null, "600,800", "ImmichImage", "frame", "Error", Arg.Any<string>());
+        logService.Received().LogCheckIn(Arg.Is<CheckInRequest>(r => 
+            r.DeviceId == "unknown" && r.Battery == null && r.ScreenResolution == "600,800" && 
+            r.Service == "ImmichImage" && r.ConfigId == "frame" && r.Status == "Error"));
     }
 
     private static ImmichController NewController(

@@ -5,7 +5,12 @@ namespace paperframe_server.Helpers;
 
 public static class DeviceHelper
 {
-    public static int GetSleepTimeSeconds(string deviceId, AppSettings config, int defaultSleep = 7200)
+    public const int DefaultSleepSeconds = 7200;
+    public const int MinimumSleepSeconds = 60;
+    public const int ErrorFallbackSleepSeconds = 3600;
+    public const string ClientScriptVersion = "1.0";
+
+    public static int GetSleepTimeSeconds(string deviceId, AppSettings config, int defaultSleep = DefaultSleepSeconds)
     {
         if (config.Devices != null && config.Devices.TryGetValue(deviceId, out var deviceConfig) && !string.IsNullOrEmpty(deviceConfig.WakeupCron))
         {
@@ -16,13 +21,13 @@ public static class DeviceHelper
                 if (next.HasValue)
                 {
                     var delay = (int)(next.Value - DateTime.UtcNow).TotalSeconds;
-                    if (delay < 60) delay = 60; // Minimum 1 minute sleep
+                    if (delay < MinimumSleepSeconds) delay = MinimumSleepSeconds;
                     return delay;
                 }
             }
-            catch
+            catch (CronFormatException)
             {
-                // Fallback to default if parsing fails at runtime
+                // Fall back to the default if the configured cron expression is invalid.
             }
         }
         return defaultSleep;

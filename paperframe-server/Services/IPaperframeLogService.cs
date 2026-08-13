@@ -13,6 +13,7 @@ public class PaperframeLogEntry
     public string ConfigId { get; set; } = string.Empty;
     public string Status { get; set; } = string.Empty; // "Redirect", "Success", "Error"
     public string Message { get; set; } = string.Empty;
+    public string ScriptVersion { get; set; } = string.Empty;
 }
 
 public class DeviceStatus
@@ -21,11 +22,12 @@ public class DeviceStatus
     public int? Battery { get; set; }
     public DateTime LastUpdate { get; set; }
     public string Status { get; set; } = string.Empty;
+    public string ScriptVersion { get; set; } = string.Empty;
 }
 
 public interface IPaperframeLogService
 {
-    void LogCheckIn(string deviceId, int? battery, string screenResolution, string service, string configId, string status, string message);
+    void LogCheckIn(CheckInRequest request);
     List<PaperframeLogEntry> GetLogs();
     Dictionary<string, DeviceStatus> GetDeviceStatuses();
 }

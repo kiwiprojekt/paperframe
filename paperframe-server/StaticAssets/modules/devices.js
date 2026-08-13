@@ -200,7 +200,7 @@ export function saveDeviceModalData() {
             return;
         }
         // Basic syntax validation (5 parts)
-        if (cronCustom.split(' ').length !== 5) {
+        if (cronCustom.trim().split(/\s+/).length !== 5) {
             alert('Cron expression must have exactly 5 parts (e.g., "0 * * * *").');
             return;
         }

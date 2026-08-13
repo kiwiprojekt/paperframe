@@ -38,7 +38,13 @@ public class MainControllerTests
         var result = controller.Get("kindle-missing");
 
         result.Should().BeOfType<NotFoundObjectResult>();
-        logService.Received().LogCheckIn("kindle-missing", 80, "600,800", "Unknown", "None", "Error", Arg.Any<string>());
+        logService.Received().LogCheckIn(Arg.Is<CheckInRequest>(r => 
+            r.DeviceId == "kindle-missing" && 
+            r.Battery == 80 && 
+            r.ScreenResolution == "600,800" && 
+            r.Service == "Unknown" && 
+            r.ConfigId == "None" && 
+            r.Status == "Error"));
     }
 
     [Fact]
@@ -82,7 +88,12 @@ public class MainControllerTests
 
         result.Should().BeOfType<RedirectResult>().Which.Url.Should().Be("/immich/frame");
         ha.Received().UpdateEntities("kindle-a", 95);
-        logService.Received().LogCheckIn("kindle-a", 95, "unknown", "Immich", "frame", "Redirect", Arg.Any<string>());
+        logService.Received().LogCheckIn(Arg.Is<CheckInRequest>(r => 
+            r.DeviceId == "kindle-a" && 
+            r.Battery == 95 && 
+            r.Service == "Immich" && 
+            r.ConfigId == "frame" && 
+            r.Status == "Redirect"));
     }
 
     private static MainController NewController(

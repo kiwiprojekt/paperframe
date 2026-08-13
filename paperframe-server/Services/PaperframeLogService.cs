@@ -17,7 +17,7 @@ public class PaperframeLogService : IPaperframeLogService
         _timeProvider = timeProvider ?? TimeProvider.System;
     }
 
-    public void LogCheckIn(string deviceId, int? battery, string screenResolution, string service, string configId, string status, string message)
+    public void LogCheckIn(CheckInRequest request)
     {
         lock (_lock)
         {
@@ -25,13 +25,14 @@ public class PaperframeLogService : IPaperframeLogService
             _logs.Add(new PaperframeLogEntry
             {
                 Timestamp = now,
-                DeviceId = deviceId,
-                Battery = battery,
-                ScreenResolution = screenResolution,
-                Service = service,
-                ConfigId = configId,
-                Status = status,
-                Message = message
+                DeviceId = request.DeviceId,
+                Battery = request.Battery,
+                ScreenResolution = request.ScreenResolution,
+                Service = request.Service,
+                ConfigId = request.ConfigId,
+                Status = request.Status,
+                Message = request.Message,
+                ScriptVersion = request.ScriptVersion
             });
 
             if (_logs.Count > MaxLogs)
@@ -40,16 +41,17 @@ public class PaperframeLogService : IPaperframeLogService
             }
 
             // Track latest status per device
-            if (!_deviceStatuses.TryGetValue(deviceId, out var devStatus))
+            if (!_deviceStatuses.TryGetValue(request.DeviceId, out var devStatus))
             {
-                devStatus = new DeviceStatus { DeviceId = deviceId };
-                _deviceStatuses[deviceId] = devStatus;
+                devStatus = new DeviceStatus { DeviceId = request.DeviceId };
+                _deviceStatuses[request.DeviceId] = devStatus;
             }
             devStatus.LastUpdate = now;
-            devStatus.Status = status;
-            if (battery.HasValue)
+            devStatus.Status = request.Status;
+            devStatus.ScriptVersion = request.ScriptVersion;
+            if (request.Battery.HasValue)
             {
-                devStatus.Battery = battery;
+                devStatus.Battery = request.Battery;
             }
         }
     }
@@ -71,7 +73,8 @@ public class PaperframeLogService : IPaperframeLogService
                 DeviceId = v.Value.DeviceId,
                 Battery = v.Value.Battery,
                 LastUpdate = v.Value.LastUpdate,
-                Status = v.Value.Status
+                Status = v.Value.Status,
+                ScriptVersion = v.Value.ScriptVersion
             });
         }
     }

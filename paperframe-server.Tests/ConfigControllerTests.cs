@@ -188,8 +188,9 @@ public class ConfigControllerTests
         var file = result.Should().BeOfType<FileContentResult>().Subject;
         var script = Encoding.UTF8.GetString(file.FileContents);
         script.Should().Contain("DEVICE_ID=\"kindle-a\"");
-        script.Should().Contain("SLEEP_TIME_S=\"7200\"");
         script.Should().Contain("SERVICES_URL=\"https://paperframe.local:8443\"");
+        script.Should().Contain("wget_headers.log");
+        script.Should().Contain("grep -i 'X-Sleep-Time:'");
     }
 
     private static ConfigController NewController(string? configPath = null, AppSettings? options = null)

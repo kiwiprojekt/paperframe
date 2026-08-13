@@ -359,8 +359,9 @@ public class ConfigController : ControllerBase
 
 # -------- Configuration --------
 DEVICE_ID=""{deviceId}"" 
-SLEEP_TIME_S=""7200""
+SLEEP_TIME_S=""{DeviceHelper.DefaultSleepSeconds}""
 SERVICES_URL=""{serverUrl}""
+SCRIPT_VERSION=""{DeviceHelper.ClientScriptVersion}""
 # -------------------------------
 SCREEN_RES=""$(eips -i | grep 'xres:' | tr -d ' xres:' | tr 'y' ',')""
 # -------------------------------
@@ -382,42 +383,44 @@ while true; do
     wget --header=""device_id: $DEVICE_ID"" \
         --header=""battery: $BATT_PERCENT"" \
         --header=""screen_res: $SCREEN_RES"" \
-        -O script.sh $SERVICES_URL; \
+        --header=""script_version: $SCRIPT_VERSION"" \
+        -S -O script.sh $SERVICES_URL 2> wget_headers.log; \
         wget_result=$?
+
+    # extract sleep time from headers
+    SLEEP_TIME_S=$(grep -i 'X-Sleep-Time:' wget_headers.log | awk '{{print $2}}' | tr -d '\r' | tail -n 1)
+    if [ -z ""$SLEEP_TIME_S"" ]; then
+        SLEEP_TIME_S={DeviceHelper.DefaultSleepSeconds}
+    fi
 
     #if download failed
     if [ $wget_result -ne 0 ]; then
         wget -qO- ""$SERVICES_URL/api/logs/client_error?device_id=$DEVICE_ID&msg=wget_failed""
         #reenable screensaver 
         lipc-set-prop com.lab126.powerd preventScreenSaver 0
-        # exit
-        exit 1;
-    fi
+        # fallback sleep
+        SLEEP_TIME_S={DeviceHelper.ErrorFallbackSleepSeconds}
+    else
+        # clear display
+        eips -f
+        sleep 1
+        eips -f
 
-    # clear display
-    eips -f
-    sleep 1
-    eips -f
+        #make variables available to downloaded script
+        export DEVICE_ID SCREEN_RES SERVICES_URL BATT_PERCENT SCRIPT_VERSION
 
-    #make variables available to downloaded script
-    export DEVICE_ID SCREEN_RES SERVICES_URL BATT_PERCENT
-
-    # run downloaded script
-    ./script.sh > script_out.log 2> script_err.log; script_result=$?
-    
-    if [ $script_result -ne 0 ]; then
-        # read error log and send
-        err_snippet=$(head -c 100 script_err.log | tr -d '\n\r' | sed 's/ /%20/g' | sed 's/&/%26/g')
-        wget -qO- ""$SERVICES_URL/api/logs/client_error?device_id=$DEVICE_ID&msg=script_failed_$err_snippet""
-        #reenable screensaver 
-        lipc-set-prop com.lab126.powerd preventScreenSaver 0
-        # exit
-        exit 1;
-    fi
-
-    if [ -f sleep_time.env ]; then
-        source sleep_time.env
-        rm sleep_time.env
+        # run downloaded script
+        ./script.sh > script_out.log 2> script_err.log; script_result=$?
+        
+        if [ $script_result -ne 0 ]; then
+            # read error log and send
+            err_snippet=$(head -c 100 script_err.log | tr -d '\n\r' | sed 's/ /%20/g' | sed 's/&/%26/g')
+            wget -qO- ""$SERVICES_URL/api/logs/client_error?device_id=$DEVICE_ID&msg=script_failed_$err_snippet""
+            #reenable screensaver 
+            lipc-set-prop com.lab126.powerd preventScreenSaver 0
+            # fallback sleep
+            SLEEP_TIME_S={DeviceHelper.ErrorFallbackSleepSeconds}
+        fi
     fi
 
     sleep 3

@@ -20,7 +20,15 @@ public class LogsController : ControllerBase
     [HttpGet("client_error")]
     public IActionResult LogClientError([FromQuery] string device_id, [FromQuery] string msg)
     {
-        _logService.LogCheckIn(device_id, null, "unknown", "Client", "None", "Error", msg);
+        _logService.LogCheckIn(new CheckInRequest(
+            DeviceId: device_id,
+            Service: "Client",
+            ConfigId: "None",
+            Status: "Error",
+            Message: msg,
+            ScreenResolution: "unknown",
+            ScriptVersion: "unknown"
+        ));
         return Ok();
     }
 }

@@ -1,12 +1,11 @@
-using System.Text.RegularExpressions;
+using System;
+using System.Collections.Generic;
+using System.Threading.Tasks;
 using paperframe_server.Services;
+using paperframe_server.Filters;
+using paperframe_server.Helpers;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
-using System;
-using System.Linq;
-using System.Threading.Tasks;
-using System.Collections.Generic;
-using paperframe_server.Helpers;
 
 namespace paperframe_server.Controllers;
 
@@ -14,12 +13,9 @@ namespace paperframe_server.Controllers;
 [Route("artchicago")]
 public class ArtChicagoController : ControllerBase
 {
-    private static string ShellEscape(string input) =>
-        Regex.Replace(input, @"[""\\$`!\r\n\t]", "");
-
     private readonly IArtChicagoService _artChicagoService;
-    private readonly IPaperframeLogService _logService;
     private readonly IOptionsMonitor<AppSettings> _optionsMonitor;
+    private readonly IPaperframeLogService _logService;
 
     public ArtChicagoController(
         IArtChicagoService artChicagoService,
@@ -27,28 +23,22 @@ public class ArtChicagoController : ControllerBase
         IPaperframeLogService logService)
     {
         _artChicagoService = artChicagoService;
-        _logService = logService;
         _optionsMonitor = options;
+        _logService = logService;
     }
 
     [HttpGet("{configId}")]
+    [DeviceScript]
     public string Get(string configId)
     {
-        var deviceId = Request.Headers["device_id"].FirstOrDefault() ?? "unknown";
-        var batteryVal = Request.Headers["battery"].FirstOrDefault();
-        int? battery = int.TryParse(batteryVal, out var b) ? b : null;
-        var screenRes = Request.Headers["screen_res"].FirstOrDefault() ?? "758,1024";
-
-        try
+        var configs = _optionsMonitor.CurrentValue.ArtChicago;
+        if (configs == null || !configs.TryGetValue(configId, out var config))
         {
-            var configs = _optionsMonitor.CurrentValue.ArtChicago;
-            if (configs == null || !configs.TryGetValue(configId, out var config))
-            {
-                throw new KeyNotFoundException($"Layout configuration '{configId}' is not defined in ArtChicago configs.");
-            }
+            throw new KeyNotFoundException($"Layout configuration '{configId}' is not defined in ArtChicago configs.");
+        }
 
-            var imageUrl = $"/artchicago/{configId}/image";
-            var script = $@"#!/bin/sh
+        var imageUrl = $"/artchicago/{configId}/image";
+        var script = $@"#!/bin/sh
 
 FBINK=""{config.FbinkPath ?? "/mnt/us/libkh/bin/fbink"}""
 IMAGE_URL=$SERVICES_URL""{imageUrl}""
@@ -57,6 +47,7 @@ $FBINK -q -k
 
 wget  --header=""device_id: $DEVICE_ID"" \
     --header=""screen_res: $SCREEN_RES"" \
+    --header=""script_version: $SCRIPT_VERSION"" \
     -O image.jpeg $IMAGE_URL; \
     image_result=$?
 
@@ -66,43 +57,17 @@ fi
 
 $FBINK --image file=image.jpeg,dither
 ";
-            var sleepTime = DeviceHelper.GetSleepTimeSeconds(deviceId, _optionsMonitor.CurrentValue);
-            script += $"\n\necho \"SLEEP_TIME_S={sleepTime}\" > sleep_time.env\n";
-
-            _logService.LogCheckIn(deviceId, battery, screenRes, "ArtChicago", configId, "Success", "ArtChicago launcher script compiled successfully.");
-
-            return script;
-        }
-        catch (Exception ex)
-        {
-            _logService.LogCheckIn(deviceId, battery, screenRes, "ArtChicago", configId, "Error", $"Layout compile failed: {ex.Message}");
-
-            var sleepTime = DeviceHelper.GetSleepTimeSeconds(deviceId, _optionsMonitor.CurrentValue);
-            return $@"#!/bin/sh
-# ARTCHICAGO COMPILE ERROR RUNTIME FALLBACK
-FBINK=""/mnt/us/libkh/bin/fbink""
-$FBINK -q -k
-$FBINK -q ""ARTCHICAGO COMPILE ERROR"" -t size=20,top=200 -O -m -C GRAY9
-$FBINK -q ""Config ID: {ShellEscape(configId)}"" -t size=12,top=260 -O -m -C GRAY6
-$FBINK -q ""Error: {ShellEscape(ex.Message)}"" -t size=10,top=320 -O -m -C GRAY3
-
-echo ""SLEEP_TIME_S={sleepTime}"" > sleep_time.env
-";
-        }
+        return script;
     }
 
     [HttpGet("{configId}/image")]
-    public async Task GetImage(string configId, [FromHeader(Name="screen_res")] string? screenRes = null, [FromHeader(Name="device_id")] string? deviceId = null)
+    public async Task GetImage(string configId)
     {
-        var batteryVal = Request.Headers["battery"].FirstOrDefault();
-        int? battery = int.TryParse(batteryVal, out var b) ? b : null;
-        
-        if (string.IsNullOrEmpty(screenRes)) screenRes = "758,1024";
-        if (string.IsNullOrEmpty(deviceId)) deviceId = "unknown";
+        var device = DeviceRequestReader.Read(Request.Headers);
 
         try
         {
-            if (deviceId == "unknown")
+            if (device.DeviceId == DeviceRequestReader.UnknownDeviceId)
             {
                 throw new ArgumentException("Missing 'device_id' header in photo request. Make sure the Paperframe client sends a valid device identifier.");
             }
@@ -113,17 +78,35 @@ echo ""SLEEP_TIME_S={sleepTime}"" > sleep_time.env
                 throw new KeyNotFoundException($"Layout configuration '{configId}' is not defined in ArtChicago configs.");
             }
 
-            var (x, y) = parseRes(screenRes);
-            var image = await _artChicagoService.GetImage(config, deviceId, x, y);
+            var (x, y) = parseRes(device.ScreenResolution);
+            var image = await _artChicagoService.GetImage(config, device.DeviceId, x, y);
             
-            _logService.LogCheckIn(deviceId, battery, screenRes, "ArtChicagoImage", configId, "Success", "Art dithered and served successfully.");
+            _logService.LogCheckIn(new CheckInRequest(
+                DeviceId: device.DeviceId,
+                Battery: device.Battery,
+                ScreenResolution: device.ScreenResolution,
+                Service: "ArtChicagoImage",
+                ConfigId: configId,
+                Status: "Success",
+                Message: "Art dithered and served successfully.",
+                ScriptVersion: device.ScriptVersion
+            ));
 
             Response.ContentType = "image/jpeg";
             await this.HttpContext.Response.Body.WriteAsync(image, 0, image.Length);
         }
         catch (Exception ex)
         {
-            _logService.LogCheckIn(deviceId, battery, screenRes, "ArtChicagoImage", configId, "Error", $"Serving photo failed: {ex.Message}");
+            _logService.LogCheckIn(new CheckInRequest(
+                DeviceId: device.DeviceId,
+                Battery: device.Battery,
+                ScreenResolution: device.ScreenResolution,
+                Service: "ArtChicagoImage",
+                ConfigId: configId,
+                Status: "Error",
+                Message: $"Serving photo failed: {ex.Message}",
+                ScriptVersion: device.ScriptVersion
+            ));
             throw;
         }
     }

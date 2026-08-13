@@ -12,9 +12,9 @@ public class PaperframeLogServiceTests
         var clock = new MutableTimeProvider(new DateTimeOffset(2026, 5, 25, 10, 0, 0, TimeSpan.Zero));
         var service = new PaperframeLogService(clock);
 
-        service.LogCheckIn("kindle-a", 42, "758,1024", "Calendar", "main", "Redirect", "first");
+        service.LogCheckIn(new CheckInRequest("kindle-a", "Calendar", "main", "Redirect", "first", "758,1024", "1.1", Battery: 42));
         clock.Advance(TimeSpan.FromMinutes(5));
-        service.LogCheckIn("kindle-a", null, "758,1024", "Calendar", "main", "Success", "second");
+        service.LogCheckIn(new CheckInRequest("kindle-a", "Calendar", "main", "Success", "second", "758,1024", "1.2", Battery: null));
 
         var logs = service.GetLogs();
         logs.Select(l => l.Message).Should().Equal("second", "first");
@@ -22,6 +22,7 @@ public class PaperframeLogServiceTests
         var status = service.GetDeviceStatuses()["kindle-a"];
         status.Status.Should().Be("Success");
         status.Battery.Should().Be(42);
+        status.ScriptVersion.Should().Be("1.2");
         status.LastUpdate.Should().Be(new DateTime(2026, 5, 25, 10, 5, 0));
     }
 
@@ -32,7 +33,7 @@ public class PaperframeLogServiceTests
 
         for (var i = 0; i < 105; i++)
         {
-            service.LogCheckIn($"kindle-{i}", i, "758,1024", "Calendar", "main", "Success", $"entry-{i}");
+            service.LogCheckIn(new CheckInRequest($"kindle-{i}", "Calendar", "main", "Success", $"entry-{i}", "758,1024", "1.0", Battery: i));
         }
 
         var logs = service.GetLogs();
