@@ -60,7 +60,13 @@ On first run, a default `appsettings.json` is created in `/app/config/`. Edit it
 ```json
 {
   "Configuration": {
-    "Devices": {},
+    "Devices": {
+      "kindle-a": {
+        "serviceName": "Calendar",
+        "configId": "family",
+        "wakeupCron": "0 7,12,18 * * *"
+      }
+    },
     "Calendar": {},
     "Immich": {},
     "HomeAssistant": {
@@ -72,7 +78,8 @@ On first run, a default `appsettings.json` is created in `/app/config/`. Edit it
       "EnableCalendar": true,
       "EnableImmich": true,
       "EnableHomeAssistant": true,
-      "ManagerPassword": ""
+      "ManagerPassword": "",
+      "TimeZoneId": "Europe/Warsaw"
     }
   }
 }
@@ -91,7 +98,11 @@ Requirements: jailbroken Kindle with [FBInk](https://github.com/NiLuJe/FBInk) in
    nohup /mnt/us/documents/paperframe.sh > /dev/null 2>&1 &
    ```
 
-The script disables the screensaver, fetches and executes the server's script, then enters deep sleep via `rtcwake`. Battery lasts weeks to months.
+The script suppresses the screensaver, fetches and executes the server's script, then enters deep sleep via `rtcwake`. Battery lasts weeks to months.
+
+The wake interval is not baked into the script. The server sends it as an `X-Sleep-Time` header on every check-in, derived from the device's `wakeupCron` (resolved in `Settings.TimeZoneId`, default UTC) or a 2 hour default. Change the schedule in the web manager; the device picks it up on its next check-in with no re-install.
+
+On any failure — download failed, no interval header, or the rendering script exited non-zero — the client reports the reason to `/client/error` and exits rather than looping blind. Disabling a device in the manager also stops the loop cleanly. Either way the screensaver is handed back to the Kindle, and restarting means re-running the launcher.
 
 ## Building from source
 

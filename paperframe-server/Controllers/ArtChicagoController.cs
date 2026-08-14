@@ -67,7 +67,7 @@ $FBINK --image file=image.jpeg,dither
 
         try
         {
-            if (device.DeviceId == DeviceRequestReader.UnknownDeviceId)
+            if (!device.IsIdentified)
             {
                 throw new ArgumentException("Missing 'device_id' header in photo request. Make sure the Paperframe client sends a valid device identifier.");
             }
@@ -81,32 +81,16 @@ $FBINK --image file=image.jpeg,dither
             var (x, y) = parseRes(device.ScreenResolution);
             var image = await _artChicagoService.GetImage(config, device.DeviceId, x, y);
             
-            _logService.LogCheckIn(new CheckInRequest(
-                DeviceId: device.DeviceId,
-                Battery: device.Battery,
-                ScreenResolution: device.ScreenResolution,
-                Service: "ArtChicagoImage",
-                ConfigId: configId,
-                Status: "Success",
-                Message: "Art dithered and served successfully.",
-                ScriptVersion: device.ScriptVersion
-            ));
+            _logService.LogCheckIn(CheckInRequest.From(
+                device, "ArtChicagoImage", configId, "Success", "Art dithered and served successfully."));
 
             Response.ContentType = "image/jpeg";
             await this.HttpContext.Response.Body.WriteAsync(image, 0, image.Length);
         }
         catch (Exception ex)
         {
-            _logService.LogCheckIn(new CheckInRequest(
-                DeviceId: device.DeviceId,
-                Battery: device.Battery,
-                ScreenResolution: device.ScreenResolution,
-                Service: "ArtChicagoImage",
-                ConfigId: configId,
-                Status: "Error",
-                Message: $"Serving photo failed: {ex.Message}",
-                ScriptVersion: device.ScriptVersion
-            ));
+            _logService.LogCheckIn(CheckInRequest.From(
+                device, "ArtChicagoImage", configId, "Error", $"Serving photo failed: {ex.Message}"));
             throw;
         }
     }

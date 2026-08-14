@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using NSubstitute;
 using paperframe_server.Controllers;
+using paperframe_server.Helpers;
 using paperframe_server.Services;
 using paperframe_server.Tests.TestSupport;
 
@@ -35,7 +36,7 @@ public class MainControllerTests
         controller.Request.Headers["battery"] = "80";
         controller.Request.Headers["screen_res"] = "600,800";
 
-        var result = controller.Get("kindle-missing");
+        var result = controller.Get();
 
         result.Should().BeOfType<NotFoundObjectResult>();
         logService.Received().LogCheckIn(Arg.Is<CheckInRequest>(r => 
@@ -61,10 +62,15 @@ public class MainControllerTests
         }, homeAssistantService: ha);
         controller.Request.Headers["device_id"] = "kindle-a";
 
-        var result = controller.Get("kindle-a");
+        var result = controller.Get();
 
         var content = result.Should().BeOfType<ContentResult>().Subject;
         content.Content.Should().Contain("Device kindle-a is disabled.");
+        // The launcher reads this code as "stop cleanly", not as a script crash worth reporting.
+        content.Content.Should().Contain($"exit {DeviceHelper.DisabledExitCode}");
+        // Releasing the screensaver guard is the launcher's job; doing it here would
+        // drop it for the rest of the loop's life.
+        content.Content.Should().NotContain("preventScreenSaver");
         ha.DidNotReceive().UpdateEntities(Arg.Any<string>(), Arg.Any<int?>());
     }
 
@@ -84,7 +90,7 @@ public class MainControllerTests
         controller.Request.Headers["device_id"] = "kindle-a";
         controller.Request.Headers["battery"] = "95";
 
-        var result = controller.Get("kindle-a");
+        var result = controller.Get();
 
         result.Should().BeOfType<RedirectResult>().Which.Url.Should().Be("/immich/frame");
         ha.Received().UpdateEntities("kindle-a", 95);

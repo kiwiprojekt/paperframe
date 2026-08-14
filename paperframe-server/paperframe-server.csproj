@@ -19,6 +19,11 @@
       <Folder Include="StaticAssets\" />
     </ItemGroup>
 
+    <!-- Shell scripts served to devices. Embedded so they cannot go missing at runtime. -->
+    <ItemGroup>
+      <EmbeddedResource Include="ClientScripts\**\*.sh" />
+    </ItemGroup>
+
     <ItemGroup>
       <None Remove="StaticAssets\**" />
       <Content Include="StaticAssets\**">

@@ -60,18 +60,9 @@ public class ConfigController : ControllerBase
                 return BadRequest(new { message = "Invalid configuration data." });
             }
 
-            if (newSettings.Devices != null)
+            if (Validate(newSettings) is { } validationError)
             {
-                foreach (var device in newSettings.Devices)
-                {
-                    if (!string.IsNullOrEmpty(device.Value.WakeupCron))
-                    {
-                        if (!DeviceHelper.TryParseCron(device.Value.WakeupCron, out var error))
-                        {
-                            return BadRequest(new { message = $"Invalid cron expression for device {device.Key}: {error}" });
-                        }
-                    }
-                }
+                return BadRequest(new { message = validationError });
             }
 
             JsonNode node;
@@ -338,107 +329,46 @@ public class ConfigController : ControllerBase
         return Ok(_logService.GetDeviceStatuses());
     }
 
+    /// <summary>
+    /// Rejects settings the scheduler cannot act on, so a bad expression fails at save
+    /// time in the UI rather than silently degrading every device to the default interval.
+    /// </summary>
+    private static string? Validate(AppSettings settings)
+    {
+        var timeZoneId = settings.Settings?.TimeZoneId;
+        if (!string.IsNullOrWhiteSpace(timeZoneId) && !DeviceHelper.TryResolveTimeZone(timeZoneId, out _, out var timeZoneError))
+        {
+            return $"Unknown timezone '{timeZoneId}': {timeZoneError}";
+        }
+
+        foreach (var (deviceId, device) in settings.Devices ?? new Dictionary<string, AppSettings.DeviceConfig>())
+        {
+            if (!string.IsNullOrWhiteSpace(device.WakeupCron)
+                && !DeviceHelper.TryParseCron(device.WakeupCron, out _, out var cronError))
+            {
+                return $"Invalid cron expression for device {deviceId}: {cronError}";
+            }
+        }
+
+        return null;
+    }
+
     [HttpGet("download-client/{deviceId}")]
     public IActionResult DownloadClientScript(string deviceId)
     {
         var config = _optionsMonitor.CurrentValue;
-        if (config.Devices == null || !config.Devices.TryGetValue(deviceId, out var deviceConfig))
+        if (config.Devices == null || !config.Devices.ContainsKey(deviceId))
         {
             return NotFound($"Device '{deviceId}' is not configured.");
         }
 
-        var scheme = Request.Scheme;
-        var host = Request.Host;
-        var serverUrl = $"{scheme}://{host}";
+        var script = ShellScript.Render(ShellScript.Launcher,
+            ("DEVICE_ID", deviceId),
+            ("SERVER_URL", $"{Request.Scheme}://{Request.Host}"),
+            ("SCRIPT_VERSION", DeviceHelper.ClientScriptVersion),
+            ("DISABLED_EXIT_CODE", DeviceHelper.DisabledExitCode.ToString()));
 
-        var paperframeTemplate = $@"#!/bin/sh
-# Name: Paperframe Client
-# Author: Michal Sadurski
-# DontUseFBInk
-# Auto-provisioned for Device: {deviceId}
-
-# -------- Configuration --------
-DEVICE_ID=""{deviceId}"" 
-SLEEP_TIME_S=""{DeviceHelper.DefaultSleepSeconds}""
-SERVICES_URL=""{serverUrl}""
-SCRIPT_VERSION=""{DeviceHelper.ClientScriptVersion}""
-# -------------------------------
-SCREEN_RES=""$(eips -i | grep 'xres:' | tr -d ' xres:' | tr 'y' ',')""
-# -------------------------------
-
-# mount filesystem as writeable
-mntroot rw
-
-# disable screensaver
-lipc-set-prop com.lab126.powerd preventScreenSaver 1
-
-# move to documents directory
-cd /mnt/us/documents
-
-while true; do
-    # get battery status
-    BATT_PERCENT=""$(gasgauge-info -s)""
-
-    # download script to execute
-    wget --header=""device_id: $DEVICE_ID"" \
-        --header=""battery: $BATT_PERCENT"" \
-        --header=""screen_res: $SCREEN_RES"" \
-        --header=""script_version: $SCRIPT_VERSION"" \
-        -S -O script.sh $SERVICES_URL 2> wget_headers.log; \
-        wget_result=$?
-
-    # extract sleep time from headers
-    SLEEP_TIME_S=$(grep -i 'X-Sleep-Time:' wget_headers.log | awk '{{print $2}}' | tr -d '\r' | tail -n 1)
-    if [ -z ""$SLEEP_TIME_S"" ]; then
-        SLEEP_TIME_S={DeviceHelper.DefaultSleepSeconds}
-    fi
-
-    #if download failed
-    if [ $wget_result -ne 0 ]; then
-        wget -qO- ""$SERVICES_URL/api/logs/client_error?device_id=$DEVICE_ID&msg=wget_failed""
-        #reenable screensaver 
-        lipc-set-prop com.lab126.powerd preventScreenSaver 0
-        # fallback sleep
-        SLEEP_TIME_S={DeviceHelper.ErrorFallbackSleepSeconds}
-    else
-        # clear display
-        eips -f
-        sleep 1
-        eips -f
-
-        #make variables available to downloaded script
-        export DEVICE_ID SCREEN_RES SERVICES_URL BATT_PERCENT SCRIPT_VERSION
-
-        # run downloaded script
-        ./script.sh > script_out.log 2> script_err.log; script_result=$?
-        
-        if [ $script_result -ne 0 ]; then
-            # read error log and send
-            err_snippet=$(head -c 100 script_err.log | tr -d '\n\r' | sed 's/ /%20/g' | sed 's/&/%26/g')
-            wget -qO- ""$SERVICES_URL/api/logs/client_error?device_id=$DEVICE_ID&msg=script_failed_$err_snippet""
-            #reenable screensaver 
-            lipc-set-prop com.lab126.powerd preventScreenSaver 0
-            # fallback sleep
-            SLEEP_TIME_S={DeviceHelper.ErrorFallbackSleepSeconds}
-        fi
-    fi
-
-    sleep 3
-
-    # set powersave mode
-    echo powersave > /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor
-
-    # schedule next wakeup
-    rtcwake -d /dev/rtc1 -m no -s $SLEEP_TIME_S
-
-    # set sleep mode
-    echo ""mem"" > /sys/power/state
-
-    sleep 5;
-done
-";
-        var bytes = System.Text.Encoding.UTF8.GetBytes(paperframeTemplate);
-        return File(bytes, "application/x-sh", "paperframe.sh");
+        return File(System.Text.Encoding.UTF8.GetBytes(script), "application/x-sh", "paperframe.sh");
     }
 
     private class ImmichAlbum

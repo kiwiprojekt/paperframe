@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using Microsoft.Extensions.Options;
 
 namespace paperframe_server.Services;
 
@@ -8,12 +9,14 @@ public class PaperframeLogService : IPaperframeLogService
 {
     private readonly List<PaperframeLogEntry> _logs = new();
     private readonly Dictionary<string, DeviceStatus> _deviceStatuses = new();
+    private readonly IOptionsMonitor<AppSettings> _options;
     private readonly TimeProvider _timeProvider;
     private readonly object _lock = new();
     private const int MaxLogs = 100;
 
-    public PaperframeLogService(TimeProvider? timeProvider = null)
+    public PaperframeLogService(IOptionsMonitor<AppSettings> options, TimeProvider? timeProvider = null)
     {
+        _options = options;
         _timeProvider = timeProvider ?? TimeProvider.System;
     }
 
@@ -40,7 +43,14 @@ public class PaperframeLogService : IPaperframeLogService
                 _logs.RemoveAt(0);
             }
 
-            // Track latest status per device
+            // Device status backs the dashboard, which only ever shows configured devices.
+            // Check-ins from unknown ids stay in the (capped) log but must not accumulate
+            // here, or any caller could grow this dictionary without bound.
+            if (_options.CurrentValue.Devices?.ContainsKey(request.DeviceId) != true)
+            {
+                return;
+            }
+
             if (!_deviceStatuses.TryGetValue(request.DeviceId, out var devStatus))
             {
                 devStatus = new DeviceStatus { DeviceId = request.DeviceId };

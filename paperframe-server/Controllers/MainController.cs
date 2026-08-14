@@ -18,7 +18,7 @@ public class MainController : ControllerBase
     private readonly AppSettings _config;
 
     public MainController(
-        IOptionsSnapshot<AppSettings> appSettings, 
+        IOptionsSnapshot<AppSettings> appSettings,
         IHomeAssistantService homeAssistantService,
         IPaperframeLogService logService,
         IWebHostEnvironment env)
@@ -28,32 +28,22 @@ public class MainController : ControllerBase
         _env = env;
         _config = appSettings.Value;
     }
-    
-    [HttpGet]
-    public IActionResult Get([FromHeader(Name = "device_id")] string? deviceId = null)
-    {
-        if (string.IsNullOrEmpty(deviceId))
-        {
-            // Serve Administration UI if no device_id header is present
-            var indexPath = Path.Combine(_env.ContentRootPath, "StaticAssets", "index.html");
-            return System.IO.File.Exists(indexPath)
-                ? PhysicalFile(indexPath, "text/html")
-                : Ok("Paperframe Server is active. Admin UI is missing from StaticAssets/index.html.");
-        }
 
+    [HttpGet]
+    public IActionResult Get()
+    {
         var device = DeviceRequestReader.Read(Request.Headers);
+
+        // A browser sends no device_id, so this same route serves the admin UI.
+        if (!device.IsIdentified)
+        {
+            return AdminUi();
+        }
 
         if (_config.Devices == null || !_config.Devices.TryGetValue(device.DeviceId, out var deviceConfig))
         {
-            _logService.LogCheckIn(new CheckInRequest(
-                DeviceId: device.DeviceId,
-                Battery: device.Battery,
-                ScreenResolution: device.ScreenResolution,
-                Service: "Unknown",
-                ConfigId: "None",
-                Status: "Error",
-                Message: "Device not found in server configuration.",
-                ScriptVersion: device.ScriptVersion));
+            _logService.LogCheckIn(CheckInRequest.From(
+                device, "Unknown", "None", "Error", "Device not found in server configuration."));
 
             return NotFound("Device not configured.");
         }
@@ -63,26 +53,12 @@ public class MainController : ControllerBase
 
         if (deviceConfig.Disabled == true)
         {
-            _logService.LogCheckIn(new CheckInRequest(
-                DeviceId: device.DeviceId,
-                Battery: device.Battery,
-                ScreenResolution: device.ScreenResolution,
-                Service: serviceName,
-                ConfigId: configId,
-                Status: "Disabled",
-                Message: "Device is disabled on server.",
-                ScriptVersion: device.ScriptVersion));
+            _logService.LogCheckIn(CheckInRequest.From(
+                device, serviceName, configId, "Disabled", "Device is disabled on server."));
 
-            var disableScript = $@"#!/bin/sh
-# Name: DisableDevice
-# Author: Paperframe Server
-# Device is disabled on the Paperframe Server
-
-echo ""Device {device.DeviceId} is disabled.""
-lipc-set-prop com.lab126.powerd preventScreenSaver 0
-exit 1
-";
-            return Content(disableScript, "text/plain");
+            return Content(ShellScript.Render(ShellScript.Disabled,
+                ("DEVICE_ID", device.DeviceId),
+                ("DISABLED_EXIT_CODE", DeviceHelper.DisabledExitCode.ToString())), "text/plain");
         }
 
         _ = _homeAssistantService.UpdateEntities(device.DeviceId, device.Battery)
@@ -92,16 +68,18 @@ exit 1
                     Console.WriteLine($"HA update failed for {device.DeviceId}: {t.Exception.InnerException?.Message}");
             }, TaskContinuationOptions.OnlyOnFaulted);
 
-        _logService.LogCheckIn(new CheckInRequest(
-            DeviceId: device.DeviceId,
-            Battery: device.Battery,
-            ScreenResolution: device.ScreenResolution,
-            Service: serviceName,
-            ConfigId: configId,
-            Status: "Redirect",
-            Message: $"Redirected to /{serviceName}/{configId}",
-            ScriptVersion: device.ScriptVersion));
+        _logService.LogCheckIn(CheckInRequest.From(
+            device, serviceName, configId, "Redirect", $"Redirected to /{serviceName}/{configId}"));
 
         return Redirect($"/{serviceName.ToLower()}/{configId}");
+    }
+
+    private IActionResult AdminUi()
+    {
+        var indexPath = Path.Combine(_env.ContentRootPath, "StaticAssets", "index.html");
+
+        return System.IO.File.Exists(indexPath)
+            ? PhysicalFile(indexPath, "text/html")
+            : Ok("Paperframe Server is active. Admin UI is missing from StaticAssets/index.html.");
     }
 }

@@ -992,60 +992,6 @@ tr:hover td {
     box-shadow: 0 0 8px var(--success);
 }
 
-/* --- Sleep interval panel (Launcher modal) --- */
-.sleep-panel {
-    background: #faf9f6;
-    border: 1px solid var(--card-border);
-    border-radius: 8px;
-    padding: 1.25rem;
-    margin-bottom: 1.5rem;
-}
-
-.sleep-panel-label {
-    font-weight: 700;
-    margin-bottom: 0.75rem;
-    display: block;
-    color: var(--accent-primary);
-    font-size: 0.8rem;
-    text-transform: uppercase;
-}
-
-.sleep-fields {
-    display: flex;
-    gap: 1rem;
-    align-items: center;
-}
-
-.sleep-field {
-    flex: 1;
-}
-
-.sleep-field label {
-    font-size: 0.72rem;
-    color: var(--text-secondary);
-    margin-bottom: 0.25rem;
-    display: block;
-}
-
-.sleep-total {
-    flex: 1.5;
-    padding-top: 1.25rem;
-    text-align: right;
-    font-size: 0.85rem;
-    color: var(--text-secondary);
-    font-weight: 500;
-}
-
-.sleep-total-value {
-    background: #f4f3eb;
-    padding: 0.25rem 0.5rem;
-    border-radius: 4px;
-    border: 1px solid var(--card-border);
-    font-family: monospace;
-    font-weight: 700;
-    color: var(--text-primary);
-}
-
 /* --- Instructions panel (Launcher modal) --- */
 .instructions-panel {
     background: #fafaf5;

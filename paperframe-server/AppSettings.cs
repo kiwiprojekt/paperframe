@@ -24,6 +24,9 @@ public class AppSettings
         public bool? EnableArtChicago { get; set; }
         public bool? EnableHomeAssistant { get; set; }
         public string? ManagerPassword { get; set; }
+
+        /// <summary>IANA id used to resolve device wakeup cron expressions. Defaults to UTC.</summary>
+        public string? TimeZoneId { get; set; }
     }
 
     public class DeviceConfig

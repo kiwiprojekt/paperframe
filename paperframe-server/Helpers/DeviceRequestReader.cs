@@ -8,13 +8,20 @@ public readonly record struct DeviceRequest(
     string DeviceId,
     int? Battery,
     string ScreenResolution,
-    string ScriptVersion);
+    string ScriptVersion)
+{
+    /// <summary>False when the client sent no usable <c>device_id</c> header.</summary>
+    public bool IsIdentified => DeviceId != DeviceRequestReader.UnknownDeviceId;
+}
 
 public static class DeviceRequestReader
 {
     public const string UnknownDeviceId = "unknown";
     public const string DefaultScreenResolution = "758,1024";
     public const string DefaultScriptVersion = "unknown";
+
+    public const string MissingDeviceIdMessage =
+        "Missing 'device_id' header. Make sure the Paperframe client sends a valid device identifier.";
 
     public static DeviceRequest Read(IHeaderDictionary headers)
     {

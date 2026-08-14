@@ -49,6 +49,33 @@ public class ApiIntegrationTests
         html.Should().Contain("Paperframe Manager");
     }
 
+    [Fact]
+    public async Task Client_error_reporting_stays_reachable_when_a_manager_password_is_configured()
+    {
+        // Devices have no session cookie. Routing this under /api would 401 every
+        // report and silently disable client error reporting on secured servers.
+        using var factory = new PaperframeWebApplicationFactory(AppSettingsJson(managerPassword: "secret"));
+        var client = factory.CreateClient();
+
+        var request = new HttpRequestMessage(HttpMethod.Get, "/client/error");
+        request.Headers.Add("device_id", "kindle-a");
+        request.Headers.Add("x-client-error", "wget_failed_4");
+        var response = await client.SendAsync(request);
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+    }
+
+    [Fact]
+    public async Task Client_error_reporting_rejects_an_unidentified_caller()
+    {
+        using var factory = new PaperframeWebApplicationFactory(AppSettingsJson(managerPassword: "secret"));
+        var client = factory.CreateClient();
+
+        var response = await client.GetAsync("/client/error");
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+    }
+
     private static string AppSettingsJson(string managerPassword) => $$"""
         {
           "Logging": {

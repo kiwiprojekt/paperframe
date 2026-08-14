@@ -67,7 +67,7 @@ $FBINK --image file=image.jpeg,dither
 
         try
         {
-            if (device.DeviceId == DeviceRequestReader.UnknownDeviceId)
+            if (!device.IsIdentified)
             {
                 throw new ArgumentException("Missing 'device_id' header in photo request. Make sure the Paperframe client sends a valid device identifier.");
             }
@@ -82,31 +82,15 @@ $FBINK --image file=image.jpeg,dither
             var image = await _immichService.GetImage(config, device.DeviceId, x, y);
             
             // Log successful photo download
-            _logService.LogCheckIn(new CheckInRequest(
-                DeviceId: device.DeviceId,
-                Battery: device.Battery,
-                ScreenResolution: device.ScreenResolution,
-                Service: "ImmichImage",
-                ConfigId: configId,
-                Status: "Success",
-                Message: "Photo dithered and served successfully.",
-                ScriptVersion: device.ScriptVersion
-            ));
+            _logService.LogCheckIn(CheckInRequest.From(
+                device, "ImmichImage", configId, "Success", "Photo dithered and served successfully."));
 
             await this.HttpContext.Response.Body.WriteAsync(image, 0, image.Length);
         }
         catch (Exception ex)
         {
-            _logService.LogCheckIn(new CheckInRequest(
-                DeviceId: device.DeviceId,
-                Battery: device.Battery,
-                ScreenResolution: device.ScreenResolution,
-                Service: "ImmichImage",
-                ConfigId: configId,
-                Status: "Error",
-                Message: $"Serving photo failed: {ex.Message}",
-                ScriptVersion: device.ScriptVersion
-            ));
+            _logService.LogCheckIn(CheckInRequest.From(
+                device, "ImmichImage", configId, "Error", $"Serving photo failed: {ex.Message}"));
             throw;
         }
     }

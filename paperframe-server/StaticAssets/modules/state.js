@@ -5,7 +5,7 @@ export let AppConfig = {
     artChicago: {},
     meteo: {},
     homeAssistant: { apiUrl: '', oauthBearerToken: '' },
-    settings: { serverAddress: '', enableCalendar: true, enableImmich: true, enableArtChicago: true, enableHomeAssistant: true, managerPassword: '' }
+    settings: { serverAddress: '', enableCalendar: true, enableImmich: true, enableArtChicago: true, enableHomeAssistant: true, managerPassword: '', timeZoneId: '' }
 };
 
 export function setAppConfig(config) {

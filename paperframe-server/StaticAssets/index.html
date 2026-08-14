@@ -355,6 +355,11 @@
                         <input type="text" id="settingsServerAddress" placeholder="http://192.168.1.100:5000" oninput="markUnsavedChanges()">
                         <span class="form-hint">Used in generated <code>paperframe.sh</code> client scripts. Leave empty to auto-detect: <code id="currentOriginHint"></code></span>
                     </div>
+                    <div class="form-group full-width">
+                        <label for="settingsTimeZoneId">Server Timezone</label>
+                        <input type="text" id="settingsTimeZoneId" placeholder="Europe/Warsaw" oninput="markUnsavedChanges()">
+                        <span class="form-hint">IANA timezone used to resolve device wakeup schedules. Leave empty for UTC.</span>
+                    </div>
                 </div>
 
                 <div class="form-section">
@@ -539,7 +544,7 @@
                             <option value="custom">Custom...</option>
                         </select>
                         <input type="text" id="modalDeviceWakeupCron" placeholder="e.g. */30 * * * *" style="display: none; margin-top: 0.5rem;" oninput="markUnsavedChanges()">
-                        <span class="form-hint" style="margin-top: 0.5rem; display: block;">The device will calculate delay to next matching time and deep sleep for that duration. Without a valid schedule, the device will exit its loop.</span>
+                        <span class="form-hint" style="margin-top: 0.5rem; display: block;">The server calculates the delay to the next matching time and the device deep sleeps for that duration. Without a schedule the device falls back to checking in every 2 hours. Times are resolved in the server timezone set under Settings.</span>
                     </div>
 
                 </div>
@@ -567,30 +572,8 @@
             </div>
             <div class="modal-body">
                 <p class="text-secondary" style="font-size: 0.9rem; margin-bottom: 1.25rem;">
-                    Configure the deep sleep interval for your Paperframe battery loop script. The server will automatically calculate the aggregate seconds and compile your pre-configured client script in real-time.
+                    Download the pre-configured battery loop script for this device. The wake interval is not baked into the script &mdash; the server sends it with every check-in, so change it under the device's <strong>Wakeup Schedule</strong>.
                 </p>
-
-                <!-- Sleep Interval Controls -->
-                <div class="sleep-panel">
-                    <span class="sleep-panel-label">Sleep Interval (Hours, Minutes, Seconds)</span>
-                    <div class="sleep-fields">
-                        <div class="sleep-field">
-                            <label for="launcherSleepHours">Hours</label>
-                            <input type="number" id="launcherSleepHours" value="2" min="0" oninput="updateLauncherScriptPreview()">
-                        </div>
-                        <div class="sleep-field">
-                            <label for="launcherSleepMinutes">Minutes</label>
-                            <input type="number" id="launcherSleepMinutes" value="0" min="0" max="59" oninput="updateLauncherScriptPreview()">
-                        </div>
-                        <div class="sleep-field">
-                            <label for="launcherSleepSeconds">Seconds</label>
-                            <input type="number" id="launcherSleepSeconds" value="0" min="0" max="59" oninput="updateLauncherScriptPreview()">
-                        </div>
-                        <div class="sleep-total">
-                            Total: <code id="totalSleepSecondsDisplay" class="sleep-total-value">7200</code> seconds
-                        </div>
-                    </div>
-                </div>
 
                 <!-- Step-by-Step Instructions -->
                 <div class="instructions-panel">
