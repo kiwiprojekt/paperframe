@@ -65,4 +65,27 @@ public class DeviceRequestReaderTests
 
         request.Battery.Should().BeNull();
     }
+
+    [Theory]
+    [InlineData("600,800", 600u, 800u)]
+    [InlineData("758,1024", 758u, 1024u)]
+    [InlineData("invalid", 758u, 1024u)]
+    [InlineData("600", 758u, 1024u)]
+    [InlineData("", 758u, 1024u)]
+    public void Read_parses_the_screen_size_once_for_every_caller(string header, uint width, uint height)
+    {
+        var headers = new HeaderDictionary { ["device_id"] = "kindle-a" };
+        if (header.Length > 0) headers["screen_res"] = header;
+
+        var device = DeviceRequestReader.Read(headers);
+
+        device.Screen.Should().Be(new ScreenSize(width, height));
+    }
+
+    [Fact]
+    public void ScreenSize_scales_relative_to_the_reference_width()
+    {
+        new ScreenSize(1516, 2048).ScaleFromReference().Should().Be(2m);
+        ScreenSize.Default.ScaleFromReference().Should().Be(1m);
+    }
 }

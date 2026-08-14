@@ -28,8 +28,9 @@ public class CalendarControllerTests
                 }
             });
         var controller = NewController(calendarService);
+        controller.Request.Headers["screen_res"] = "1516,2048";
 
-        var script = await controller.Get("family", screenRes: "1516,2048");
+        var script = await controller.Get("family");
 
         script.Should().StartWith("#!/bin/sh");
         script.Should().Contain("FBINK=\"/mnt/us/libkh/bin/fbink\"");

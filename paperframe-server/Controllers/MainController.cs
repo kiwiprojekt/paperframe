@@ -57,8 +57,8 @@ public class MainController : ControllerBase
                 device, serviceName, configId, "Disabled", "Device is disabled on server."));
 
             return Content(ShellScript.Render(ShellScript.Disabled,
-                ("DEVICE_ID", device.DeviceId),
-                ("DISABLED_EXIT_CODE", DeviceHelper.DisabledExitCode.ToString())), "text/plain");
+                ShellScript.Text("DEVICE_ID", device.DeviceId),
+                ShellScript.Raw("DISABLED_EXIT_CODE", ClientProtocol.DisabledExitCode.ToString())), "text/plain");
         }
 
         _ = _homeAssistantService.UpdateEntities(device.DeviceId, device.Battery)

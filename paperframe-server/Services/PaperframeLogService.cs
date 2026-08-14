@@ -46,7 +46,7 @@ public class PaperframeLogService : IPaperframeLogService
             // Device status backs the dashboard, which only ever shows configured devices.
             // Check-ins from unknown ids stay in the (capped) log but must not accumulate
             // here, or any caller could grow this dictionary without bound.
-            if (_options.CurrentValue.Devices?.ContainsKey(request.DeviceId) != true)
+            if (!IsConfigured(request.DeviceId))
             {
                 return;
             }
@@ -66,6 +66,8 @@ public class PaperframeLogService : IPaperframeLogService
         }
     }
 
+    private bool IsConfigured(string deviceId) => _options.CurrentValue.Devices?.ContainsKey(deviceId) == true;
+
     public List<PaperframeLogEntry> GetLogs()
     {
         lock (_lock)
@@ -78,7 +80,9 @@ public class PaperframeLogService : IPaperframeLogService
     {
         lock (_lock)
         {
-            return _deviceStatuses.ToDictionary(k => k.Key, v => new DeviceStatus
+            // Also filtered on read: a device deleted from the configuration leaves a
+            // stale entry behind, and the dashboard must not keep reporting it.
+            return _deviceStatuses.Where(e => IsConfigured(e.Key)).ToDictionary(k => k.Key, v => new DeviceStatus
             {
                 DeviceId = v.Value.DeviceId,
                 Battery = v.Value.Battery,

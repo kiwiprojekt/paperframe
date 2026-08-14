@@ -3,7 +3,6 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Filters;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
-using System;
 using System.Threading.Tasks;
 using paperframe_server.Services;
 using paperframe_server.Helpers;
@@ -11,28 +10,22 @@ using paperframe_server.Helpers;
 namespace paperframe_server.Filters;
 
 /// <summary>
-/// Wraps a device-facing rendering endpoint: identifies the caller, tells it when to
-/// wake next, records the check-in, and turns a layout compile failure into an
-/// on-screen diagnostic rather than an HTTP error the device cannot display.
+/// A device-facing endpoint that returns a shell script. On top of the identity check
+/// it tells the device when to wake next, records the check-in, and turns a layout
+/// compile failure into an on-screen diagnostic rather than an HTTP error the device
+/// has no way to display.
 /// </summary>
-public class DeviceScriptAttribute : Attribute, IAsyncActionFilter
+public sealed class DeviceScriptAttribute : IdentifiedDeviceAttribute
 {
-    public async Task OnActionExecutionAsync(ActionExecutingContext context, ActionExecutionDelegate next)
+    protected override async Task OnIdentifiedAsync(
+        DeviceRequest device, ActionExecutingContext context, ActionExecutionDelegate next)
     {
         var httpContext = context.HttpContext;
-        var device = DeviceRequestReader.Read(httpContext.Request.Headers);
-
-        if (!device.IsIdentified)
-        {
-            context.Result = new BadRequestObjectResult(DeviceRequestReader.MissingDeviceIdMessage);
-            return;
-        }
-
         var options = httpContext.RequestServices.GetRequiredService<IOptionsMonitor<AppSettings>>();
         var logService = httpContext.RequestServices.GetRequiredService<IPaperframeLogService>();
 
-        httpContext.Response.Headers["X-Sleep-Time"] =
-            DeviceHelper.GetSleepTimeSeconds(device.DeviceId, options.CurrentValue).ToString();
+        httpContext.Response.Headers[ClientProtocol.SleepHeader] =
+            WakeupSchedule.SecondsUntilNextWake(device.DeviceId, options.CurrentValue).ToString();
 
         var serviceName = context.RouteData.Values["controller"]?.ToString() ?? "Unknown";
         var configId = context.RouteData.Values["configId"] as string ?? "None";
@@ -57,9 +50,9 @@ public class DeviceScriptAttribute : Attribute, IAsyncActionFilter
         resultContext.Result = new ContentResult
         {
             Content = ShellScript.Render(ShellScript.CompileError,
-                ("SERVICE", serviceName.ToUpperInvariant()),
-                ("CONFIG_ID", configId),
-                ("ERROR", failure.Message)),
+                ShellScript.Text("SERVICE", serviceName.ToUpperInvariant()),
+                ShellScript.Text("CONFIG_ID", configId),
+                ShellScript.Text("ERROR", failure.Message)),
             ContentType = "text/plain",
             StatusCode = StatusCodes.Status200OK
         };

@@ -3,7 +3,7 @@ using paperframe_server.Helpers;
 
 namespace paperframe_server.Tests;
 
-public class DeviceHelperTests
+public class WakeupScheduleTests
 {
     [Theory]
     [InlineData("Europe/Warsaw")]
@@ -13,7 +13,7 @@ public class DeviceHelperTests
     {
         // "0 8 * * *" has to mean 8am where the frame hangs. A UTC-naive
         // implementation wakes the device at 8am UTC instead.
-        var seconds = DeviceHelper.GetSleepTimeSeconds("kindle-a", ConfigFor("0 8 * * *", timeZoneId));
+        var seconds = WakeupSchedule.SecondsUntilNextWake("kindle-a", ConfigFor("0 8 * * *", timeZoneId));
 
         var wakeUpAt = TimeZoneInfo.ConvertTime(
             DateTimeOffset.UtcNow.AddSeconds(seconds),
@@ -28,7 +28,7 @@ public class DeviceHelperTests
     {
         var config = ConfigFor(wakeupCron: null, timeZoneId: "Europe/Warsaw");
 
-        DeviceHelper.GetSleepTimeSeconds("kindle-a", config).Should().Be(DeviceHelper.DefaultSleepSeconds);
+        WakeupSchedule.SecondsUntilNextWake("kindle-a", config).Should().Be(WakeupSchedule.DefaultSleepSeconds);
     }
 
     [Fact]
@@ -36,7 +36,7 @@ public class DeviceHelperTests
     {
         var config = ConfigFor(wakeupCron: "0 * * * *", timeZoneId: null);
 
-        DeviceHelper.GetSleepTimeSeconds("not-registered", config).Should().Be(DeviceHelper.DefaultSleepSeconds);
+        WakeupSchedule.SecondsUntilNextWake("not-registered", config).Should().Be(WakeupSchedule.DefaultSleepSeconds);
     }
 
     [Fact]
@@ -45,7 +45,7 @@ public class DeviceHelperTests
         // Fires every minute, so the next occurrence is always under the floor.
         var config = ConfigFor(wakeupCron: "* * * * *", timeZoneId: "UTC");
 
-        DeviceHelper.GetSleepTimeSeconds("kindle-a", config).Should().Be(DeviceHelper.MinimumSleepSeconds);
+        WakeupSchedule.SecondsUntilNextWake("kindle-a", config).Should().Be(WakeupSchedule.MinimumSleepSeconds);
     }
 
     [Fact]
@@ -53,15 +53,15 @@ public class DeviceHelperTests
     {
         var config = ConfigFor(wakeupCron: "not a cron", timeZoneId: "UTC");
 
-        DeviceHelper.GetSleepTimeSeconds("kindle-a", config).Should().Be(DeviceHelper.DefaultSleepSeconds);
+        WakeupSchedule.SecondsUntilNextWake("kindle-a", config).Should().Be(WakeupSchedule.DefaultSleepSeconds);
     }
 
     [Fact]
     public void ResolveTimeZone_falls_back_to_utc_when_unset_or_unknown()
     {
-        DeviceHelper.ResolveTimeZone(ConfigFor(null, timeZoneId: null)).Should().Be(TimeZoneInfo.Utc);
-        DeviceHelper.ResolveTimeZone(ConfigFor(null, timeZoneId: "  ")).Should().Be(TimeZoneInfo.Utc);
-        DeviceHelper.ResolveTimeZone(ConfigFor(null, timeZoneId: "Mars/Olympus_Mons")).Should().Be(TimeZoneInfo.Utc);
+        WakeupSchedule.ResolveTimeZone(ConfigFor(null, timeZoneId: null)).Should().Be(TimeZoneInfo.Utc);
+        WakeupSchedule.ResolveTimeZone(ConfigFor(null, timeZoneId: "  ")).Should().Be(TimeZoneInfo.Utc);
+        WakeupSchedule.ResolveTimeZone(ConfigFor(null, timeZoneId: "Mars/Olympus_Mons")).Should().Be(TimeZoneInfo.Utc);
     }
 
     [Theory]
@@ -73,7 +73,7 @@ public class DeviceHelperTests
     [InlineData("nonsense", false)]
     public void TryParseCron_reports_whether_the_expression_is_usable(string? expression, bool expected)
     {
-        DeviceHelper.TryParseCron(expression, out var cron, out var error).Should().Be(expected);
+        WakeupSchedule.TryParseCron(expression, out var cron, out var error).Should().Be(expected);
 
         if (expected)
         {

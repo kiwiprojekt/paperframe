@@ -4,24 +4,21 @@ using Cronos;
 
 namespace paperframe_server.Helpers;
 
-public static class DeviceHelper
+/// <summary>
+/// Decides when a device should wake next, from its cron expression resolved in the
+/// server's configured timezone.
+/// </summary>
+public static class WakeupSchedule
 {
     public const int DefaultSleepSeconds = 7200;
     public const int MinimumSleepSeconds = 60;
-    public const string ClientScriptVersion = "1.1";
-
-    /// <summary>
-    /// Exit code the disable script returns so the launcher can tell "the server
-    /// told me to stop" apart from "the rendering script crashed".
-    /// </summary>
-    public const int DisabledExitCode = 42;
 
     /// <summary>
     /// Seconds until the device's next scheduled wake, or <see cref="DefaultSleepSeconds"/>
     /// when it has no usable schedule. Cron expressions are resolved in the server's
     /// configured timezone, so "0 8 * * *" means 8am where the frame actually hangs.
     /// </summary>
-    public static int GetSleepTimeSeconds(string deviceId, AppSettings config)
+    public static int SecondsUntilNextWake(string deviceId, AppSettings config)
     {
         if (config.Devices == null
             || !config.Devices.TryGetValue(deviceId, out var device)

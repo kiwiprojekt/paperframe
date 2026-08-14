@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using NSubstitute;
 using paperframe_server.Controllers;
+using paperframe_server.Filters;
 using paperframe_server.Services;
 using paperframe_server.Tests.TestSupport;
 using System;
@@ -76,20 +77,13 @@ public class ArtChicagoControllerTests
     }
 
     [Fact]
-    public async Task GetImage_logs_and_rethrows_when_device_id_is_missing()
+    public void GetImage_carries_the_identified_device_filter()
     {
-        var logService = Substitute.For<IPaperframeLogService>();
-        var controller = NewController(logService: logService);
-        controller.Request.Headers["screen_res"] = "600,800";
-        controller.Response.Body = new MemoryStream();
-
-        var act = () => controller.GetImage("frame");
-
-        await act.Should().ThrowAsync<ArgumentException>()
-            .WithMessage("Missing 'device_id' header in photo request*");
-        logService.Received().LogCheckIn(Arg.Is<CheckInRequest>(r => 
-            r.DeviceId == "unknown" && r.Battery == null && r.ScreenResolution == "600,800" && 
-            r.Service == "ArtChicagoImage" && r.ConfigId == "frame" && r.Status == "Error"));
+        // Rejecting an unidentified caller is the filter's job, so every device
+        // route answers 400 instead of each one inventing its own failure mode.
+        typeof(ArtChicagoController).GetMethod(nameof(ArtChicagoController.GetImage))!
+            .GetCustomAttributes(typeof(IdentifiedDeviceAttribute), inherit: true)
+            .Should().NotBeEmpty();
     }
 
     private static ArtChicagoController NewController(
@@ -114,7 +108,7 @@ public class ArtChicagoControllerTests
 
         controller.ControllerContext = new ControllerContext
         {
-            HttpContext = new DefaultHttpContext()
+            HttpContext = new DefaultHttpContext { Request = { Path = "/artchicago/frame" } }
         };
         return controller;
     }

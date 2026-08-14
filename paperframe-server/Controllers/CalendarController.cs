@@ -29,19 +29,15 @@ public class CalendarController : ControllerBase
 
     [HttpGet("{configId}")]
     [DeviceScript]
-    public async Task<string> Get(string configId, [FromHeader(Name="screen_res")]string? screenRes = null)
+    public async Task<string> Get(string configId)
     {
-        if (string.IsNullOrEmpty(screenRes)) screenRes = DeviceRequestReader.DefaultScreenResolution;
-
         var calendarConfigs = _optionsMonitor.CurrentValue.Calendar;
         if (calendarConfigs == null || !calendarConfigs.TryGetValue(configId, out var config))
         {
             throw new KeyNotFoundException($"Layout configuration '{configId}' is not defined in Calendar configs.");
         }
 
-        var m = decimal.TryParse(screenRes.Split(',')[0], out var screenWidth) && screenWidth > 0
-            ? screenWidth / 758m
-            : 1m;
+        var m = DeviceRequestReader.Read(Request.Headers).Screen.ScaleFromReference();
         var timeZone = TimeZoneInfo.FindSystemTimeZoneById(config.TimeZoneId ?? "UTC");
         var date = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, timeZone);
         var culture = System.Globalization.CultureInfo.GetCultureInfo(config.CultureInfoName ?? "en-US");

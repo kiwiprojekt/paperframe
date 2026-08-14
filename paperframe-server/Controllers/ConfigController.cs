@@ -336,7 +336,7 @@ public class ConfigController : ControllerBase
     private static string? Validate(AppSettings settings)
     {
         var timeZoneId = settings.Settings?.TimeZoneId;
-        if (!string.IsNullOrWhiteSpace(timeZoneId) && !DeviceHelper.TryResolveTimeZone(timeZoneId, out _, out var timeZoneError))
+        if (!string.IsNullOrWhiteSpace(timeZoneId) && !WakeupSchedule.TryResolveTimeZone(timeZoneId, out _, out var timeZoneError))
         {
             return $"Unknown timezone '{timeZoneId}': {timeZoneError}";
         }
@@ -344,7 +344,7 @@ public class ConfigController : ControllerBase
         foreach (var (deviceId, device) in settings.Devices ?? new Dictionary<string, AppSettings.DeviceConfig>())
         {
             if (!string.IsNullOrWhiteSpace(device.WakeupCron)
-                && !DeviceHelper.TryParseCron(device.WakeupCron, out _, out var cronError))
+                && !WakeupSchedule.TryParseCron(device.WakeupCron, out _, out var cronError))
             {
                 return $"Invalid cron expression for device {deviceId}: {cronError}";
             }
@@ -363,10 +363,11 @@ public class ConfigController : ControllerBase
         }
 
         var script = ShellScript.Render(ShellScript.Launcher,
-            ("DEVICE_ID", deviceId),
-            ("SERVER_URL", $"{Request.Scheme}://{Request.Host}"),
-            ("SCRIPT_VERSION", DeviceHelper.ClientScriptVersion),
-            ("DISABLED_EXIT_CODE", DeviceHelper.DisabledExitCode.ToString()));
+            ShellScript.Text("DEVICE_ID", deviceId),
+            ShellScript.Raw("SERVER_URL", $"{Request.Scheme}://{Request.Host}"),
+            ShellScript.Raw("SCRIPT_VERSION", ClientProtocol.Version),
+            ShellScript.Raw("SLEEP_HEADER", ClientProtocol.SleepHeader),
+            ShellScript.Raw("DISABLED_EXIT_CODE", ClientProtocol.DisabledExitCode.ToString()));
 
         return File(System.Text.Encoding.UTF8.GetBytes(script), "application/x-sh", "paperframe.sh");
     }

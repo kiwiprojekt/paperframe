@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using NSubstitute;
 using paperframe_server.Controllers;
+using paperframe_server.Filters;
 using paperframe_server.Services;
 
 namespace paperframe_server.Tests;
@@ -34,12 +35,13 @@ public class ClientLogControllerTests
     }
 
     [Fact]
-    public void ReportError_rejects_a_request_without_a_device_id()
+    public void ReportError_carries_the_identified_device_filter()
     {
-        var controller = NewController();
-
-        controller.ReportError("anything").Should().BeOfType<BadRequestObjectResult>();
-        _logService.DidNotReceive().LogCheckIn(Arg.Any<CheckInRequest>());
+        // The 400 itself is covered end-to-end in ApiIntegrationTests; what matters
+        // here is that this route does not reinvent the rejection.
+        typeof(ClientLogController).GetMethod(nameof(ClientLogController.ReportError))!
+            .GetCustomAttributes(typeof(IdentifiedDeviceAttribute), inherit: true)
+            .Should().NotBeEmpty();
     }
 
     [Fact]

@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using NSubstitute;
 using paperframe_server.Controllers;
+using paperframe_server.Filters;
 using paperframe_server.Services;
 using paperframe_server.Tests.TestSupport;
 using System;
@@ -23,6 +24,43 @@ public class ImmichControllerTests
 
         script.Should().Contain("IMAGE_URL=$SERVICES_URL\"/immich/frame/image\"");
         script.Should().Contain("FBINK=\"/mnt/us/libkh/bin/fbink\"");
+    }
+
+    [Fact]
+    public void Get_falls_back_to_the_default_fbink_path_when_unset()
+    {
+        var controller = NewController(options: new AppSettings
+        {
+            Immich = new Dictionary<string, AppSettings.ImmichConfig> { ["frame"] = new() { FbinkPath = null } }
+        });
+
+        controller.Get("frame").Should().Contain("FBINK=\"/mnt/us/libkh/bin/fbink\"");
+    }
+
+    [Fact]
+    public void Get_script_exits_rather_than_returning_when_the_image_fetch_fails()
+    {
+        // "return" outside a function is an error in ash/dash: the script would
+        // carry on and render a stale image instead of reporting the failure.
+        var script = NewController().Get("frame");
+
+        script.Should().Contain("exit 1");
+        script.Should().NotContain("return 1");
+    }
+
+    [Fact]
+    public async Task GetImage_declares_the_jpeg_content_type()
+    {
+        var immichService = Substitute.For<IImmichService>();
+        immichService.GetImage(Arg.Any<AppSettings.ImmichConfig>(), Arg.Any<string>(), Arg.Any<uint>(), Arg.Any<uint>())
+            .Returns(new byte[] { 1 });
+        var controller = NewController(immichService);
+        controller.Request.Headers["device_id"] = "kindle-a";
+        controller.Response.Body = new MemoryStream();
+
+        await controller.GetImage("frame");
+
+        controller.Response.ContentType.Should().Be("image/jpeg");
     }
 
     [Fact]
@@ -76,20 +114,13 @@ public class ImmichControllerTests
     }
 
     [Fact]
-    public async Task GetImage_logs_and_rethrows_when_device_id_is_missing()
+    public void GetImage_carries_the_identified_device_filter()
     {
-        var logService = Substitute.For<IPaperframeLogService>();
-        var controller = NewController(logService: logService);
-        controller.Request.Headers["screen_res"] = "600,800";
-        controller.Response.Body = new MemoryStream();
-
-        var act = () => controller.GetImage("frame");
-
-        await act.Should().ThrowAsync<ArgumentException>()
-            .WithMessage("Missing 'device_id' header in photo request*");
-        logService.Received().LogCheckIn(Arg.Is<CheckInRequest>(r => 
-            r.DeviceId == "unknown" && r.Battery == null && r.ScreenResolution == "600,800" && 
-            r.Service == "ImmichImage" && r.ConfigId == "frame" && r.Status == "Error"));
+        // Rejecting an unidentified caller is the filter's job, so every device
+        // route answers 400 instead of each one inventing its own failure mode.
+        typeof(ImmichController).GetMethod(nameof(ImmichController.GetImage))!
+            .GetCustomAttributes(typeof(IdentifiedDeviceAttribute), inherit: true)
+            .Should().NotBeEmpty();
     }
 
     private static ImmichController NewController(
@@ -116,7 +147,7 @@ public class ImmichControllerTests
 
         controller.ControllerContext = new ControllerContext
         {
-            HttpContext = new DefaultHttpContext()
+            HttpContext = new DefaultHttpContext { Request = { Path = "/immich/frame" } }
         };
         return controller;
     }

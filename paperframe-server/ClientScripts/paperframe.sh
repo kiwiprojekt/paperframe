@@ -60,7 +60,7 @@ while true; do
     fi
 
     # the server dictates the wake interval; there is deliberately no local default
-    SLEEP_TIME_S=$(grep -i 'X-Sleep-Time:' wget_headers.log | awk '{print $2}' | tr -d '\r' | tail -n 1)
+    SLEEP_TIME_S=$(grep -i '@SLEEP_HEADER@:' wget_headers.log | awk '{print $2}' | tr -d '\r' | tail -n 1)
     if [ -z "$SLEEP_TIME_S" ]; then
         die "missing_sleep_header"
     fi

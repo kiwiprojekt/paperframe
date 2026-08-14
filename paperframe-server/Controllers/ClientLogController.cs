@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using paperframe_server.Filters;
 using paperframe_server.Helpers;
 using paperframe_server.Services;
 
@@ -23,14 +24,10 @@ public class ClientLogController : ControllerBase
     }
 
     [HttpGet("error")]
+    [IdentifiedDevice]
     public IActionResult ReportError([FromHeader(Name = "x-client-error")] string? message = null)
     {
         var device = DeviceRequestReader.Read(Request.Headers);
-
-        if (!device.IsIdentified)
-        {
-            return BadRequest(DeviceRequestReader.MissingDeviceIdMessage);
-        }
 
         _logService.LogCheckIn(CheckInRequest.From(
             device, "Client", "None", "Error", Summarize(message)));

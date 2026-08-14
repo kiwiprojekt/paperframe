@@ -67,7 +67,7 @@ public class MainControllerTests
         var content = result.Should().BeOfType<ContentResult>().Subject;
         content.Content.Should().Contain("Device kindle-a is disabled.");
         // The launcher reads this code as "stop cleanly", not as a script crash worth reporting.
-        content.Content.Should().Contain($"exit {DeviceHelper.DisabledExitCode}");
+        content.Content.Should().Contain($"exit {ClientProtocol.DisabledExitCode}");
         // Releasing the screensaver guard is the launcher's job; doing it here would
         // drop it for the rest of the loop's life.
         content.Content.Should().NotContain("preventScreenSaver");

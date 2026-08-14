@@ -55,6 +55,26 @@ public class PaperframeLogServiceTests
         service.GetDeviceStatuses().Keys.Should().Equal("kindle-a");
     }
 
+    [Fact]
+    public void GetDeviceStatuses_omits_devices_that_were_removed_from_configuration()
+    {
+        var options = new TestOptionsMonitor<AppSettings>(new AppSettings
+        {
+            Devices = new Dictionary<string, AppSettings.DeviceConfig> { ["kindle-a"] = new(), ["kindle-b"] = new() }
+        });
+        var service = new PaperframeLogService(options);
+
+        service.LogCheckIn(new CheckInRequest("kindle-a", "Calendar", "main", "Success", "a", "758,1024", "1.1"));
+        service.LogCheckIn(new CheckInRequest("kindle-b", "Calendar", "main", "Success", "b", "758,1024", "1.1"));
+
+        options.CurrentValue = new AppSettings
+        {
+            Devices = new Dictionary<string, AppSettings.DeviceConfig> { ["kindle-a"] = new() }
+        };
+
+        service.GetDeviceStatuses().Keys.Should().Equal("kindle-a");
+    }
+
     private static PaperframeLogService NewService(params string[] configuredDeviceIds) =>
         NewService(null, configuredDeviceIds);
 
