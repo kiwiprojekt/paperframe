@@ -18,6 +18,7 @@ public readonly record struct ScreenSize(uint Width, uint Height)
             && uint.TryParse(parts[0], out var width)
             && uint.TryParse(parts[1], out var height)
             && width > 0
+            && height > 0
                 ? new ScreenSize(width, height)
                 : Default;
     }
@@ -63,5 +64,28 @@ public static class DeviceRequestReader
             Battery: int.TryParse(battery, out var b) ? b : null,
             ScreenResolution: string.IsNullOrEmpty(screenRes) ? DefaultScreenResolution : screenRes,
             ScriptVersion: string.IsNullOrEmpty(scriptVersion) ? DefaultScriptVersion : scriptVersion);
+    }
+}
+
+public static class DeviceRequestContext
+{
+    private const string ItemKey = "paperframe.device";
+
+    /// <summary>
+    /// The device that made this request. Parsed on first use and cached for the rest of
+    /// the request, so filters, middleware, and actions all read the same headers once
+    /// rather than each reaching for <see cref="IHeaderDictionary"/> on their own.
+    /// </summary>
+    public static DeviceRequest Device(this HttpContext context)
+    {
+        if (context.Items.TryGetValue(ItemKey, out var cached) && cached is DeviceRequest device)
+        {
+            return device;
+        }
+
+        var parsed = DeviceRequestReader.Read(context.Request.Headers);
+        context.Items[ItemKey] = parsed;
+
+        return parsed;
     }
 }

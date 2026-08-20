@@ -15,7 +15,7 @@ public class IdentifiedDeviceAttribute : Attribute, IAsyncActionFilter
 {
     public async Task OnActionExecutionAsync(ActionExecutingContext context, ActionExecutionDelegate next)
     {
-        var device = DeviceRequestReader.Read(context.HttpContext.Request.Headers);
+        var device = context.HttpContext.Device();
 
         if (!device.IsIdentified)
         {

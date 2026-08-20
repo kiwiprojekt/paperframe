@@ -1,4 +1,5 @@
 using Flurl.Http;
+using paperframe_server.Middleware;
 using paperframe_server.Services;
 using Microsoft.Extensions.FileProviders;
 using System;
@@ -92,6 +93,8 @@ public class Program
                 Path.Combine(builder.Environment.ContentRootPath, "StaticAssets")),
             RequestPath = "/assets"
         });
+
+        app.UseMiddleware<WakeupHeaderMiddleware>();
 
         app.Use(async (context, next) =>
         {

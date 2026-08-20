@@ -27,7 +27,7 @@ public class ClientLogController : ControllerBase
     [IdentifiedDevice]
     public IActionResult ReportError([FromHeader(Name = "x-client-error")] string? message = null)
     {
-        var device = DeviceRequestReader.Read(Request.Headers);
+        var device = HttpContext.Device();
 
         _logService.LogCheckIn(CheckInRequest.From(
             device, "Client", "None", "Error", Summarize(message)));

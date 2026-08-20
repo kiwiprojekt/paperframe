@@ -32,7 +32,7 @@ public class MainController : ControllerBase
     [HttpGet]
     public IActionResult Get()
     {
-        var device = DeviceRequestReader.Read(Request.Headers);
+        var device = HttpContext.Device();
 
         // A browser sends no device_id, so this same route serves the admin UI.
         if (!device.IsIdentified)
@@ -56,9 +56,11 @@ public class MainController : ControllerBase
             _logService.LogCheckIn(CheckInRequest.From(
                 device, serviceName, configId, "Disabled", "Device is disabled on server."));
 
-            return Content(ShellScript.Render(ShellScript.Disabled,
-                ShellScript.Text("DEVICE_ID", device.DeviceId),
-                ShellScript.Raw("DISABLED_EXIT_CODE", ClientProtocol.DisabledExitCode.ToString())), "text/plain");
+            // The header is what stops the loop; the body is an inert comment so that a
+            // client which somehow ran it anyway would still do nothing.
+            Response.Headers[ClientProtocol.DisabledHeader] = "1";
+
+            return Content("# Device is disabled on the Paperframe server.\n", "text/plain");
         }
 
         _ = _homeAssistantService.UpdateEntities(device.DeviceId, device.Battery)

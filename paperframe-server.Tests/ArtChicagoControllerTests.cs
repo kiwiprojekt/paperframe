@@ -8,6 +8,7 @@ using paperframe_server.Services;
 using paperframe_server.Tests.TestSupport;
 using System;
 using System.IO;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Collections.Generic;
 
@@ -58,6 +59,30 @@ public class ArtChicagoControllerTests
         logService.Received().LogCheckIn(Arg.Is<CheckInRequest>(r => 
             r.DeviceId == "kindle-a" && r.Battery == 12 && r.ScreenResolution == "600,800" && 
             r.Service == "ArtChicagoImage" && r.ConfigId == "frame" && r.Status == "Success"));
+    }
+
+    [Fact]
+    public async Task GetImage_logs_aborted_when_client_disconnects_mid_render()
+    {
+        var cts = new CancellationTokenSource();
+        var artChicagoService = Substitute.For<IArtChicagoService>();
+        artChicagoService.GetImage(Arg.Any<AppSettings.ArtChicagoConfig>(), "kindle-a", 600, 800)
+            .Returns((Func<NSubstitute.Core.CallInfo, byte[]>)(_ =>
+            {
+                cts.Cancel();
+                throw new OperationCanceledException(cts.Token);
+            }));
+        var logService = Substitute.For<IPaperframeLogService>();
+        var controller = NewController(artChicagoService, logService: logService);
+        controller.Request.Headers["device_id"] = "kindle-a";
+        controller.Request.Headers["screen_res"] = "600,800";
+        controller.HttpContext.RequestAborted = cts.Token;
+
+        var act = () => controller.GetImage("frame");
+
+        await act.Should().ThrowAsync<OperationCanceledException>();
+        logService.Received().LogCheckIn(Arg.Is<CheckInRequest>(r =>
+            r.DeviceId == "kindle-a" && r.Service == "ArtChicagoImage" && r.ConfigId == "frame" && r.Status == "Aborted"));
     }
 
     [Fact]

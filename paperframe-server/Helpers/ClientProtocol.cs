@@ -9,14 +9,15 @@ namespace paperframe_server.Helpers;
 public static class ClientProtocol
 {
     /// <summary>Reported by the client as <c>script_version</c>. Bump when the launcher changes.</summary>
-    public const string Version = "1.1";
+    public const string Version = "1.2";
 
     /// <summary>Response header carrying the seconds until the device's next wake.</summary>
     public const string SleepHeader = "X-Sleep-Time";
 
     /// <summary>
-    /// Exit code the disable script returns, so the launcher can tell "the server told
-    /// me to stop" apart from "the rendering script crashed".
+    /// Response header telling the device to stop its loop. A header rather than a
+    /// script the device has to download and run, so "stop" is decided before the
+    /// device commits to executing anything.
     /// </summary>
-    public const int DisabledExitCode = 42;
+    public const string DisabledHeader = "X-Paperframe-Disabled";
 }

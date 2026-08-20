@@ -8,7 +8,6 @@
 DEVICE_ID="@DEVICE_ID@"
 SERVICES_URL="@SERVER_URL@"
 SCRIPT_VERSION="@SCRIPT_VERSION@"
-DISABLED_EXIT_CODE=@DISABLED_EXIT_CODE@
 # -------------------------------
 SCREEN_RES="$(eips -i | grep 'xres:' | tr -d ' xres:' | tr 'y' ',')"
 # -------------------------------
@@ -59,6 +58,12 @@ while true; do
         die "wget_failed_$wget_result"
     fi
 
+    # the server asks us to stop by stamping this header on its answer, which is
+    # checked before anything downloaded gets executed
+    if grep -qi '@DISABLED_HEADER@:' wget_headers.log; then
+        cleanup 0
+    fi
+
     # the server dictates the wake interval; there is deliberately no local default
     SLEEP_TIME_S=$(grep -i '@SLEEP_HEADER@:' wget_headers.log | awk '{print $2}' | tr -d '\r' | tail -n 1)
     if [ -z "$SLEEP_TIME_S" ]; then
@@ -76,11 +81,6 @@ while true; do
     # run downloaded script
     ./script.sh > script_out.log 2> script_err.log
     script_result=$?
-
-    # the server asks us to stop by serving the disable script
-    if [ $script_result -eq $DISABLED_EXIT_CODE ]; then
-        cleanup 0
-    fi
 
     if [ $script_result -ne 0 ]; then
         err=$(head -c 150 script_err.log | tr '\n\r\t' '   ' | sed 's/[^a-zA-Z0-9 ._:/-]//g')

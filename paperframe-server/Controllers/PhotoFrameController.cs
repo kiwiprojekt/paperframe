@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using paperframe_server.Filters;
@@ -36,7 +37,7 @@ public abstract class PhotoFrameController<TConfig> : ControllerBase
     protected abstract Task<byte[]> RenderAsync(TConfig config, DeviceRequest device, ScreenSize screen);
 
     [HttpGet("{configId}")]
-    [DeviceScript]
+    [DeviceCheckIn]
     public string Get(string configId)
     {
         var config = Require(configId);
@@ -45,29 +46,41 @@ public abstract class PhotoFrameController<TConfig> : ControllerBase
             ShellScript.Text("SERVICE", ServiceName),
             ShellScript.Text("FBINK_PATH", FbinkPathOf(config) ?? DefaultFbinkPath),
             // The image lives directly under this request's own route.
-            ShellScript.Raw("IMAGE_PATH", $"{Request.Path.Value?.TrimEnd('/')}/image"));
+            ShellScript.Text("IMAGE_PATH", $"{Request.Path.Value?.TrimEnd('/')}/image"));
     }
 
     [HttpGet("{configId}/image")]
     [IdentifiedDevice]
     public async Task GetImage(string configId)
     {
-        var device = DeviceRequestReader.Read(Request.Headers);
+        var device = HttpContext.Device();
+        var stopwatch = Stopwatch.StartNew();
 
         try
         {
             var image = await RenderAsync(Require(configId), device, device.Screen);
 
             _logService.LogCheckIn(CheckInRequest.From(
-                device, $"{ServiceName}Image", configId, "Success", "Photo dithered and served successfully."));
+                device, $"{ServiceName}Image", configId, "Success",
+                $"Photo dithered and served successfully in {stopwatch.ElapsedMilliseconds}ms."));
 
             Response.ContentType = "image/jpeg";
             await Response.Body.WriteAsync(image);
         }
+        catch (OperationCanceledException) when (HttpContext.RequestAborted.IsCancellationRequested)
+        {
+            // The device gave up (e.g. its own wget timed out) before we finished rendering,
+            // so this is a client-side timeout rather than a server failure.
+            _logService.LogCheckIn(CheckInRequest.From(
+                device, $"{ServiceName}Image", configId, "Aborted",
+                $"Client disconnected after {stopwatch.ElapsedMilliseconds}ms."));
+            throw;
+        }
         catch (Exception ex)
         {
             _logService.LogCheckIn(CheckInRequest.From(
-                device, $"{ServiceName}Image", configId, "Error", $"Serving photo failed: {ex.Message}"));
+                device, $"{ServiceName}Image", configId, "Error",
+                $"Serving photo failed after {stopwatch.ElapsedMilliseconds}ms: {ex.Message}"));
             throw;
         }
     }

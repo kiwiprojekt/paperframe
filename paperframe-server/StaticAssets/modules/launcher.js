@@ -31,6 +31,7 @@ export async function updateLauncherScriptPreview() {
             document.getElementById('launcherCodeContent').innerText = "Failed to fetch launcher script preview.";
         }
     } catch (e) {
+        console.error('Failed to load script preview', e);
         document.getElementById('launcherCodeContent').innerText = "Network error loading launcher script preview.";
     }
 }

@@ -45,7 +45,6 @@ public class ClientScriptTests
         script.Should().Contain("wget_headers.log");
         script.Should().Contain($"grep -i '{ClientProtocol.SleepHeader}:'");
         script.Should().Contain($"SCRIPT_VERSION=\"{ClientProtocol.Version}\"");
-        script.Should().Contain($"DISABLED_EXIT_CODE={ClientProtocol.DisabledExitCode}");
         script.Should().NotContain("@");
     }
 
@@ -78,12 +77,17 @@ public class ClientScriptTests
     }
 
     [Fact]
-    public void Launcher_stops_cleanly_on_the_disable_exit_code()
+    public void Launcher_stops_cleanly_on_the_disable_header_before_running_anything()
     {
         var script = LauncherScript();
 
-        script.Should().Contain($"if [ $script_result -eq $DISABLED_EXIT_CODE ]");
-        script.Should().Contain("cleanup 0");
+        script.Should().Contain($"grep -qi '{ClientProtocol.DisabledHeader}:'");
+
+        // The check has to precede execution: a disabled device must not run a body it
+        // was never meant to, nor die on the wake interval the server had no reason to send.
+        var disableCheck = script.IndexOf(ClientProtocol.DisabledHeader, StringComparison.Ordinal);
+        disableCheck.Should().BeLessThan(script.IndexOf("missing_sleep_header", StringComparison.Ordinal));
+        disableCheck.Should().BeLessThan(script.IndexOf("./script.sh", StringComparison.Ordinal));
     }
 
     [Fact]

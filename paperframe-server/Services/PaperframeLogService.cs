@@ -43,30 +43,45 @@ public class PaperframeLogService : IPaperframeLogService
                 _logs.RemoveAt(0);
             }
 
-            // Device status backs the dashboard, which only ever shows configured devices.
-            // Check-ins from unknown ids stay in the (capped) log but must not accumulate
-            // here, or any caller could grow this dictionary without bound.
-            if (!IsConfigured(request.DeviceId))
-            {
-                return;
-            }
-
-            if (!_deviceStatuses.TryGetValue(request.DeviceId, out var devStatus))
-            {
-                devStatus = new DeviceStatus { DeviceId = request.DeviceId };
-                _deviceStatuses[request.DeviceId] = devStatus;
-            }
-            devStatus.LastUpdate = now;
-            devStatus.Status = request.Status;
-            devStatus.ScriptVersion = request.ScriptVersion;
-            if (request.Battery.HasValue)
-            {
-                devStatus.Battery = request.Battery;
-            }
+            RecordStatus(request, now);
         }
     }
 
-    private bool IsConfigured(string deviceId) => _options.CurrentValue.Devices?.ContainsKey(deviceId) == true;
+    /// <summary>
+    /// Mirrors the status map onto the configured device list, which is the single rule
+    /// governing it: ids the server does not know are logged but never tracked (otherwise
+    /// any caller could grow this map without bound), and ids that have left the
+    /// configuration are dropped. Enforcing it on the one path that mutates the map
+    /// leaves <see cref="GetDeviceStatuses"/> a straight projection.
+    /// </summary>
+    private void RecordStatus(CheckInRequest request, DateTime now)
+    {
+        var configured = _options.CurrentValue.Devices;
+
+        foreach (var staleId in _deviceStatuses.Keys.Where(id => configured?.ContainsKey(id) != true).ToList())
+        {
+            _deviceStatuses.Remove(staleId);
+        }
+
+        if (configured?.ContainsKey(request.DeviceId) != true)
+        {
+            return;
+        }
+
+        if (!_deviceStatuses.TryGetValue(request.DeviceId, out var devStatus))
+        {
+            devStatus = new DeviceStatus { DeviceId = request.DeviceId };
+            _deviceStatuses[request.DeviceId] = devStatus;
+        }
+
+        devStatus.LastUpdate = now;
+        devStatus.Status = request.Status;
+        devStatus.ScriptVersion = request.ScriptVersion;
+        if (request.Battery.HasValue)
+        {
+            devStatus.Battery = request.Battery;
+        }
+    }
 
     public List<PaperframeLogEntry> GetLogs()
     {
@@ -80,9 +95,7 @@ public class PaperframeLogService : IPaperframeLogService
     {
         lock (_lock)
         {
-            // Also filtered on read: a device deleted from the configuration leaves a
-            // stale entry behind, and the dashboard must not keep reporting it.
-            return _deviceStatuses.Where(e => IsConfigured(e.Key)).ToDictionary(k => k.Key, v => new DeviceStatus
+            return _deviceStatuses.ToDictionary(k => k.Key, v => new DeviceStatus
             {
                 DeviceId = v.Value.DeviceId,
                 Battery = v.Value.Battery,

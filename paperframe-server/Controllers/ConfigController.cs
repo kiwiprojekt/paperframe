@@ -35,7 +35,6 @@ public class ConfigController : ControllerBase
         _logService = logService;
     }
 
-
     [HttpGet]
     public IActionResult GetConfig()
     {
@@ -326,7 +325,13 @@ public class ConfigController : ControllerBase
     [HttpGet("devices/status")]
     public IActionResult GetDeviceStatuses()
     {
-        return Ok(_logService.GetDeviceStatuses());
+        // The version this server would hand out today travels with the statuses, so the
+        // manager can tell a device running an outdated launcher from a current one.
+        return Ok(new
+        {
+            expectedScriptVersion = ClientProtocol.Version,
+            devices = _logService.GetDeviceStatuses()
+        });
     }
 
     /// <summary>
@@ -364,10 +369,10 @@ public class ConfigController : ControllerBase
 
         var script = ShellScript.Render(ShellScript.Launcher,
             ShellScript.Text("DEVICE_ID", deviceId),
-            ShellScript.Raw("SERVER_URL", $"{Request.Scheme}://{Request.Host}"),
+            ShellScript.Text("SERVER_URL", $"{Request.Scheme}://{Request.Host}"),
             ShellScript.Raw("SCRIPT_VERSION", ClientProtocol.Version),
             ShellScript.Raw("SLEEP_HEADER", ClientProtocol.SleepHeader),
-            ShellScript.Raw("DISABLED_EXIT_CODE", ClientProtocol.DisabledExitCode.ToString()));
+            ShellScript.Raw("DISABLED_HEADER", ClientProtocol.DisabledHeader));
 
         return File(System.Text.Encoding.UTF8.GetBytes(script), "application/x-sh", "paperframe.sh");
     }

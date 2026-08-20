@@ -450,7 +450,7 @@
                 </div>
 
                 <div class="log-table-container">
-                    <table>
+                    <table class="logs-table">
                         <thead>
                             <tr>
                                 <th>Timestamp</th>
@@ -889,6 +889,10 @@
                         <span class="meta-label">Last Seen</span>
                         <span class="meta-value" data-field="lastSeen"></span>
                     </div>
+                    <div class="device-meta-item">
+                        <span class="meta-label">Client</span>
+                        <span class="meta-value" data-field="scriptVersion"></span>
+                    </div>
                 </div>
                 <div class="device-card-actions">
                     <div class="device-actions-secondary">
@@ -1002,16 +1006,16 @@
     <!-- Telemetry log row -->
     <template id="tpl-log-row">
         <tr>
-            <td style="font-weight: 500;">
+            <td style="font-weight: 500; white-space: nowrap;">
                 <span data-field="time"></span>
-                <span class="text-xs text-secondary" style="display: block;" data-field="date"></span>
+                <span class="text-xs text-secondary" data-field="date"></span>
             </td>
             <td><code class="code-chip" data-field="deviceId"></code></td>
             <td style="font-weight: 600;" data-field="battery"></td>
             <td data-field="resolution"></td>
             <td><strong data-field="service"></strong> <span class="text-sm text-secondary" data-field="configId"></span></td>
             <td><span class="badge" data-field="statusBadge"></span></td>
-            <td class="text-secondary" style="max-width: 250px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" data-field="message"></td>
+            <td class="text-secondary" data-field="message"></td>
         </tr>
     </template>
 

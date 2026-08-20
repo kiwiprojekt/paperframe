@@ -234,6 +234,7 @@ export async function loadTelemetryLogs() {
             let badgeClass = 'badge-success';
             if (l.status.toLowerCase() === 'error')    badgeClass = 'badge-error';
             if (l.status.toLowerCase() === 'disabled') badgeClass = 'badge-error';
+            if (l.status.toLowerCase() === 'aborted')  badgeClass = 'badge-error';
             if (l.status.toLowerCase() === 'redirect') badgeClass = 'badge-redirect';
             const statusBadge = f('statusBadge');
             statusBadge.textContent = l.status;

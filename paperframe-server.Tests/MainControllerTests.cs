@@ -49,7 +49,7 @@ public class MainControllerTests
     }
 
     [Fact]
-    public void Get_disabled_device_returns_disable_script_and_skips_home_assistant_update()
+    public void Get_disabled_device_answers_with_the_disable_header_and_skips_home_assistant_update()
     {
         var ha = Substitute.For<IHomeAssistantService>();
         ha.UpdateEntities(Arg.Any<string>(), Arg.Any<int?>()).Returns(Task.CompletedTask);
@@ -64,10 +64,12 @@ public class MainControllerTests
 
         var result = controller.Get();
 
+        // The header is what stops the loop, so the device never has to run anything to
+        // learn it is disabled.
+        controller.Response.Headers[ClientProtocol.DisabledHeader].ToString().Should().Be("1");
+
         var content = result.Should().BeOfType<ContentResult>().Subject;
-        content.Content.Should().Contain("Device kindle-a is disabled.");
-        // The launcher reads this code as "stop cleanly", not as a script crash worth reporting.
-        content.Content.Should().Contain($"exit {ClientProtocol.DisabledExitCode}");
+        content.Content.Should().StartWith("#");
         // Releasing the screensaver guard is the launcher's job; doing it here would
         // drop it for the rest of the loop's life.
         content.Content.Should().NotContain("preventScreenSaver");

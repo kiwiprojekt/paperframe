@@ -102,7 +102,7 @@ The script suppresses the screensaver, fetches and executes the server's script,
 
 The wake interval is not baked into the script. The server sends it as an `X-Sleep-Time` header on every check-in, derived from the device's `wakeupCron` (resolved in `Settings.TimeZoneId`, default UTC) or a 2 hour default. Change the schedule in the web manager; the device picks it up on its next check-in with no re-install.
 
-On any failure — download failed, no interval header, or the rendering script exited non-zero — the client reports the reason to `/client/error` and exits rather than looping blind. Disabling a device in the manager also stops the loop cleanly. Either way the screensaver is handed back to the Kindle, and restarting means re-running the launcher.
+On any failure — download failed, no interval header, or the rendering script exited non-zero — the client reports the reason to `/client/error` and exits rather than looping blind. Disabling a device in the manager stops the loop cleanly instead: the server answers with an `X-Paperframe-Disabled` header, which the client checks before it runs anything it downloaded. Either way the screensaver is handed back to the Kindle, and restarting means re-running the launcher.
 
 ## Building from source
 

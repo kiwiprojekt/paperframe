@@ -71,6 +71,7 @@ public class PaperframeLogServiceTests
         {
             Devices = new Dictionary<string, AppSettings.DeviceConfig> { ["kindle-a"] = new() }
         };
+        service.LogCheckIn(new CheckInRequest("kindle-a", "Calendar", "main", "Success", "a again", "758,1024", "1.2"));
 
         service.GetDeviceStatuses().Keys.Should().Equal("kindle-a");
     }

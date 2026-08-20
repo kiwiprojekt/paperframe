@@ -529,6 +529,17 @@ tr:hover td {
     background: #fbfbf9;
 }
 
+.logs-table th,
+.logs-table td {
+    padding: 0.5rem 0.75rem;
+    font-size: 0.82rem;
+}
+
+.logs-table td[data-field="message"] {
+    white-space: normal;
+    word-break: break-word;
+}
+
 /* --- Badges --- */
 .badge {
     display: inline-flex;

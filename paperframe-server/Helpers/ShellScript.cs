@@ -24,18 +24,23 @@ public readonly record struct ScriptValue(string Token, string Value);
 public static class ShellScript
 {
     public const string Launcher = "paperframe.sh";
-    public const string Disabled = "disabled.sh";
-    public const string CompileError = "compile-error.sh";
     public const string PhotoFrame = "photo-frame.sh";
 
     private static readonly ConcurrentDictionary<string, string> Templates = new();
     private static readonly Regex Placeholder = new(@"@([A-Z0-9_]+)@", RegexOptions.Compiled);
     private static readonly Regex ShellMetacharacters = new(@"[""\\$`!\r\n\t]", RegexOptions.Compiled);
 
-    /// <summary>Untrusted text — device ids, config ids, exception messages. Escaped.</summary>
+    /// <summary>
+    /// Anything that reached this process from outside it — device ids, config ids,
+    /// request URLs and paths, exception messages. Escaped.
+    /// </summary>
     public static ScriptValue Text(string token, string? value) => new(token, Escape(value));
 
-    /// <summary>A structural value this server controls — exit codes, header names, paths it composed.</summary>
+    /// <summary>
+    /// A compile-time constant this server owns: header names, protocol versions, exit
+    /// codes. Nothing derived from a request qualifies, however well-formed it looks —
+    /// a URL built from the Host header is the client's text, not the server's.
+    /// </summary>
     public static ScriptValue Raw(string token, string value) => new(token, value);
 
     /// <summary>

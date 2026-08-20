@@ -163,6 +163,27 @@ public class ConfigControllerTests
         result.Should().BeOfType<NotFoundObjectResult>();
     }
 
+    [Fact]
+    public void Device_statuses_carry_the_launcher_version_the_server_would_hand_out()
+    {
+        // Without it the manager can report a version but not judge it, which is the
+        // only reason to record one.
+        var logService = Substitute.For<IPaperframeLogService>();
+        logService.GetDeviceStatuses().Returns(new Dictionary<string, DeviceStatus>
+        {
+            ["kindle-a"] = new() { DeviceId = "kindle-a", ScriptVersion = "1.0" }
+        });
+        var controller = new ConfigController(
+            new ConfigFilePointer(Path.Combine(Directory.CreateTempSubdirectory("paperframe-status-test-").FullName, "appsettings.json")),
+            new TestOptionsMonitor<AppSettings>(new AppSettings()),
+            logService);
+
+        var payload = Payload(controller.GetDeviceStatuses());
+
+        payload.GetProperty("expectedScriptVersion").GetString().Should().Be(ClientProtocol.Version);
+        payload.GetProperty("devices").GetProperty("kindle-a").GetProperty("scriptVersion").GetString().Should().Be("1.0");
+    }
+
     private static ConfigController NewController(string? configPath = null, AppSettings? options = null)
     {
         var path = configPath ?? Path.Combine(Directory.CreateTempSubdirectory("paperframe-config-test-").FullName, "appsettings.json");

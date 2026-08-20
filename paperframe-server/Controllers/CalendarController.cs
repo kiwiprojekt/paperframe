@@ -28,7 +28,7 @@ public class CalendarController : ControllerBase
     }
 
     [HttpGet("{configId}")]
-    [DeviceScript]
+    [DeviceCheckIn]
     public async Task<string> Get(string configId)
     {
         var calendarConfigs = _optionsMonitor.CurrentValue.Calendar;
@@ -37,7 +37,7 @@ public class CalendarController : ControllerBase
             throw new KeyNotFoundException($"Layout configuration '{configId}' is not defined in Calendar configs.");
         }
 
-        var m = DeviceRequestReader.Read(Request.Headers).Screen.ScaleFromReference();
+        var m = HttpContext.Device().Screen.ScaleFromReference();
         var timeZone = TimeZoneInfo.FindSystemTimeZoneById(config.TimeZoneId ?? "UTC");
         var date = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, timeZone);
         var culture = System.Globalization.CultureInfo.GetCultureInfo(config.CultureInfoName ?? "en-US");
