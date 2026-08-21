@@ -7,9 +7,11 @@
 FBINK="@FBINK_PATH@"
 IMAGE_URL=$SERVICES_URL"@IMAGE_PATH@"
 
+@RETRY_WGET_FN@
+
 $FBINK -q -k
 
-wget --header="device_id: $DEVICE_ID" \
+retry_wget --header="device_id: $DEVICE_ID" \
     --header="screen_res: $SCREEN_RES" \
     --header="script_version: $SCRIPT_VERSION" \
     -O image.jpeg "$IMAGE_URL"

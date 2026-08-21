@@ -45,7 +45,9 @@ public class ClientScriptTests
         script.Should().Contain("wget_headers.log");
         script.Should().Contain($"grep -i '{ClientProtocol.SleepHeader}:'");
         script.Should().Contain($"SCRIPT_VERSION=\"{ClientProtocol.Version}\"");
-        script.Should().NotContain("@");
+        // No unresolved @TOKEN@ placeholder should survive rendering. A plain "not contain @"
+        // check is too broad now that the script legitimately uses "$@" to forward wget args.
+        script.Should().NotMatchRegex(@"@[A-Z0-9_]+@");
     }
 
     [Fact]

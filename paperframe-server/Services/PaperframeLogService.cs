@@ -58,6 +58,8 @@ public class PaperframeLogService : IPaperframeLogService
     {
         var configured = _options.CurrentValue.Devices;
 
+        // O(devices) on every check-in; fine at today's device counts, but if that list
+        // ever grows large, move this prune to a config-reload hook instead of the hot path.
         foreach (var staleId in _deviceStatuses.Keys.Where(id => configured?.ContainsKey(id) != true).ToList())
         {
             _deviceStatuses.Remove(staleId);

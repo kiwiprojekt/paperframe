@@ -216,11 +216,8 @@ export function saveDeviceModalData() {
             alert('Please provide a valid cron expression.');
             return;
         }
-        // Basic syntax validation (5 parts)
-        if (cronCustom.trim().split(/\s+/).length !== 5) {
-            alert('Cron expression must have exactly 5 parts (e.g., "0 * * * *").');
-            return;
-        }
+        // Full syntax validation happens server-side (WakeupSchedule.TryParseCron) so the
+        // rule is only encoded once.
         finalCron = cronCustom;
     } else {
         finalCron = cronPreset;

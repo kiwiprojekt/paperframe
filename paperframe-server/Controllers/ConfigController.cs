@@ -372,7 +372,8 @@ public class ConfigController : ControllerBase
             ShellScript.Text("SERVER_URL", $"{Request.Scheme}://{Request.Host}"),
             ShellScript.Raw("SCRIPT_VERSION", ClientProtocol.Version),
             ShellScript.Raw("SLEEP_HEADER", ClientProtocol.SleepHeader),
-            ShellScript.Raw("DISABLED_HEADER", ClientProtocol.DisabledHeader));
+            ShellScript.Raw("DISABLED_HEADER", ClientProtocol.DisabledHeader),
+            ShellScript.Raw("RETRY_WGET_FN", ShellScript.Load(ShellScript.RetryWgetHelper)));
 
         return File(System.Text.Encoding.UTF8.GetBytes(script), "application/x-sh", "paperframe.sh");
     }

@@ -33,6 +33,8 @@ die() {
     cleanup 1
 }
 
+@RETRY_WGET_FN@
+
 # mount filesystem as writeable
 mntroot rw
 
@@ -47,7 +49,7 @@ while true; do
     BATT_PERCENT="$(gasgauge-info -s)"
 
     # download script to execute
-    wget --header="device_id: $DEVICE_ID" \
+    retry_wget --header="device_id: $DEVICE_ID" \
         --header="battery: $BATT_PERCENT" \
         --header="screen_res: $SCREEN_RES" \
         --header="script_version: $SCRIPT_VERSION" \

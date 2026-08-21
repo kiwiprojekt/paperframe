@@ -25,6 +25,7 @@ public static class ShellScript
 {
     public const string Launcher = "paperframe.sh";
     public const string PhotoFrame = "photo-frame.sh";
+    public const string RetryWgetHelper = "retry-wget.sh";
 
     private static readonly ConcurrentDictionary<string, string> Templates = new();
     private static readonly Regex Placeholder = new(@"@([A-Z0-9_]+)@", RegexOptions.Compiled);

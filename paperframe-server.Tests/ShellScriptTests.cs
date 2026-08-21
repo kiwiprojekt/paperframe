@@ -11,7 +11,8 @@ public class ShellScriptTests
         var script = ShellScript.Render(ShellScript.PhotoFrame,
             ShellScript.Text("SERVICE", "Immich"),
             ShellScript.Text("FBINK_PATH", "/mnt/us/libkh/bin/fbink"),
-            ShellScript.Text("IMAGE_PATH", "/immich/fam\"; rm -rf /; echo \"/image"));
+            ShellScript.Text("IMAGE_PATH", "/immich/fam\"; rm -rf /; echo \"/image"),
+            ShellScript.Raw("RETRY_WGET_FN", ShellScript.Load(ShellScript.RetryWgetHelper)));
 
         var assignment = script.Split('\n').Single(l => l.StartsWith("IMAGE_URL="));
         assignment.Should().Be("IMAGE_URL=$SERVICES_URL\"/immich/fam; rm -rf /; echo /image\"");
@@ -27,7 +28,8 @@ public class ShellScriptTests
             ShellScript.Text("SERVER_URL", "https://paperframe.local"),
             ShellScript.Raw("SCRIPT_VERSION", "1.2"),
             ShellScript.Raw("SLEEP_HEADER", "X-Sleep-Time"),
-            ShellScript.Raw("DISABLED_HEADER", "X-Paperframe-Disabled"));
+            ShellScript.Raw("DISABLED_HEADER", "X-Paperframe-Disabled"),
+            ShellScript.Raw("RETRY_WGET_FN", ShellScript.Load(ShellScript.RetryWgetHelper)));
 
         script.Should().Contain("X-Sleep-Time:");
         script.Should().Contain("X-Paperframe-Disabled:");
