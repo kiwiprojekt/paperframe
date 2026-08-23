@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 
+using paperframe_server.Helpers;
+
 namespace paperframe_server.Services;
 
 public class PaperframeLogEntry
@@ -28,6 +30,13 @@ public class DeviceStatus
 public interface IPaperframeLogService
 {
     void LogCheckIn(CheckInRequest request);
+
+    /// <summary>
+    /// Records the log lines a device carried in with it. Separate from
+    /// <see cref="LogCheckIn"/> because these are history, not a verdict: they must not
+    /// overwrite what the device's current status says about it.
+    /// </summary>
+    void LogDeviceDiagnostics(DeviceRequest device);
     List<PaperframeLogEntry> GetLogs();
     Dictionary<string, DeviceStatus> GetDeviceStatuses();
 }

@@ -367,15 +367,9 @@ public class ConfigController : ControllerBase
             return NotFound($"Device '{deviceId}' is not configured.");
         }
 
-        var script = ShellScript.Render(ShellScript.Launcher,
-            ShellScript.Text("DEVICE_ID", deviceId),
-            ShellScript.Text("SERVER_URL", $"{Request.Scheme}://{Request.Host}"),
-            ShellScript.Raw("SCRIPT_VERSION", ClientProtocol.Version),
-            ShellScript.Raw("SLEEP_HEADER", ClientProtocol.SleepHeader),
-            ShellScript.Raw("DISABLED_HEADER", ClientProtocol.DisabledHeader),
-            ShellScript.Raw("RETRY_WGET_FN", ShellScript.Load(ShellScript.RetryWgetHelper)));
+        var script = LauncherScript.Render(deviceId, $"{Request.Scheme}://{Request.Host}");
 
-        return File(System.Text.Encoding.UTF8.GetBytes(script), "application/x-sh", "paperframe.sh");
+        return File(System.Text.Encoding.UTF8.GetBytes(script), "application/x-sh", LauncherScript.FileName);
     }
 
     private class ImmichAlbum

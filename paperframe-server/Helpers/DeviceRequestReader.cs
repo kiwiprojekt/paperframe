@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using Microsoft.AspNetCore.Http;
 
@@ -33,7 +34,9 @@ public readonly record struct DeviceRequest(
     string DeviceId,
     int? Battery,
     string ScreenResolution,
-    string ScriptVersion)
+    string ScriptVersion,
+    IReadOnlyList<string> ClientLog,
+    bool SkipProvisioning)
 {
     /// <summary>False when the client sent no usable <c>device_id</c> header.</summary>
     public bool IsIdentified => DeviceId != DeviceRequestReader.UnknownDeviceId;
@@ -52,6 +55,25 @@ public static class DeviceRequestReader
     public const string MissingDeviceIdMessage =
         "Missing 'device_id' header. Make sure the Paperframe client sends a valid device identifier.";
 
+    /// <summary>Header carrying the device's undelivered log lines, separated by <see cref="ClientLogSeparator"/>.</summary>
+    public const string ClientLogHeader = "x-client-log";
+
+    /// <summary>Header a device sets to ask not to be sent into provisioning again.</summary>
+    public const string SkipProvisioningHeader = "x-skip-provision";
+
+    /// <summary>
+    /// Newlines cannot travel in a header, so the client flattens its log onto one line
+    /// with this character.
+    /// </summary>
+    public const char ClientLogSeparator = '~';
+
+    /// <summary>
+    /// Ceiling on how much of the log header is kept. The client trims its outbox to well
+    /// under this; the cap is here so a caller that ignores the protocol cannot spend the
+    /// server's memory on one request.
+    /// </summary>
+    public const int MaxClientLogLines = 64;
+
     public static DeviceRequest Read(IHeaderDictionary headers)
     {
         var deviceId = headers["device_id"].FirstOrDefault();
@@ -63,8 +85,23 @@ public static class DeviceRequestReader
             DeviceId: string.IsNullOrEmpty(deviceId) ? UnknownDeviceId : deviceId,
             Battery: int.TryParse(battery, out var b) ? b : null,
             ScreenResolution: string.IsNullOrEmpty(screenRes) ? DefaultScreenResolution : screenRes,
-            ScriptVersion: string.IsNullOrEmpty(scriptVersion) ? DefaultScriptVersion : scriptVersion);
+            ScriptVersion: string.IsNullOrEmpty(scriptVersion) ? DefaultScriptVersion : scriptVersion,
+            ClientLog: ReadClientLog(headers[ClientLogHeader].FirstOrDefault()),
+            SkipProvisioning: !string.IsNullOrEmpty(headers[SkipProvisioningHeader].FirstOrDefault()));
     }
+
+    /// <summary>
+    /// Splits the flattened log header back into lines. Everything here arrived from a
+    /// device over the wire, so it is bounded and stripped of blanks before it is stored.
+    /// </summary>
+    private static IReadOnlyList<string> ReadClientLog(string? header) =>
+        string.IsNullOrWhiteSpace(header)
+            ? Array.Empty<string>()
+            // The newest lines, not the oldest: the device trims its outbox from the front,
+            // so an over-budget delivery is exactly the one whose tail matters.
+            : header.Split(ClientLogSeparator, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .TakeLast(MaxClientLogLines)
+                .ToArray();
 }
 
 public static class DeviceRequestContext

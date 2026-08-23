@@ -46,8 +46,7 @@ public abstract class PhotoFrameController<TConfig> : ControllerBase
             ShellScript.Text("SERVICE", ServiceName),
             ShellScript.Text("FBINK_PATH", FbinkPathOf(config) ?? DefaultFbinkPath),
             // The image lives directly under this request's own route.
-            ShellScript.Text("IMAGE_PATH", $"{Request.Path.Value?.TrimEnd('/')}/image"),
-            ShellScript.Raw("RETRY_WGET_FN", ShellScript.Load(ShellScript.RetryWgetHelper)));
+            ShellScript.Text("IMAGE_PATH", $"{Request.Path.Value?.TrimEnd('/')}/image"));
     }
 
     [HttpGet("{configId}/image")]

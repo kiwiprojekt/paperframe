@@ -2,21 +2,48 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Microsoft.Extensions.Options;
+using paperframe_server.Helpers;
 
 namespace paperframe_server.Services;
 
 public class PaperframeLogService : IPaperframeLogService
 {
-    private readonly List<PaperframeLogEntry> _logs = new();
+    private readonly List<PaperframeLogEntry> _checkIns = new();
+    private readonly List<PaperframeLogEntry> _deviceLines = new();
     private readonly Dictionary<string, DeviceStatus> _deviceStatuses = new();
     private readonly IOptionsMonitor<AppSettings> _options;
+    private readonly PaperframeLogFile _file;
     private readonly TimeProvider _timeProvider;
     private readonly object _lock = new();
-    private const int MaxLogs = 100;
+    /// <summary>
+    /// Check-in verdicts kept in memory for the manager's log view.
+    ///
+    /// Held apart from the lines devices deliver, because the two arrive at wildly different
+    /// rates: one delivery can carry dozens of device lines, and sharing a single ring meant
+    /// two chatty check-ins could flush every verdict out of view. The durable copy on disk
+    /// holds the full history of both.
+    /// </summary>
+    public const int MaxLogs = 100;
 
-    public PaperframeLogService(IOptionsMonitor<AppSettings> options, TimeProvider? timeProvider = null)
+    /// <summary>Lines delivered from devices' own logs, retained independently of check-ins.</summary>
+    public const int MaxDeviceLines = 400;
+
+    /// <summary>Config id recorded for entries that have no configuration behind them.</summary>
+    private const string NoConfig = "None";
+
+    /// <summary>Service name entries carried in from a device's own log are filed under.</summary>
+    public const string DeviceService = "Client";
+
+    /// <summary>Status entries carried in from a device's own log are filed under.</summary>
+    public const string DeviceStatusName = "Device";
+
+    public PaperframeLogService(
+        IOptionsMonitor<AppSettings> options,
+        PaperframeLogFile file,
+        TimeProvider? timeProvider = null)
     {
         _options = options;
+        _file = file;
         _timeProvider = timeProvider ?? TimeProvider.System;
     }
 
@@ -25,7 +52,7 @@ public class PaperframeLogService : IPaperframeLogService
         lock (_lock)
         {
             var now = _timeProvider.GetLocalNow().DateTime;
-            _logs.Add(new PaperframeLogEntry
+            Append(_checkIns, MaxLogs, new PaperframeLogEntry
             {
                 Timestamp = now,
                 DeviceId = request.DeviceId,
@@ -38,12 +65,63 @@ public class PaperframeLogService : IPaperframeLogService
                 ScriptVersion = request.ScriptVersion
             });
 
-            if (_logs.Count > MaxLogs)
+            RecordStatus(request, now);
+        }
+    }
+
+    private readonly Dictionary<string, string> _lastDiagnostics = new();
+
+    public void LogDeviceDiagnostics(DeviceRequest device)
+    {
+        lock (_lock)
+        {
+            // wget repeats its headers when it follows the server's redirect, so the same
+            // lines arrive again on the second hop while the device clears its outbox only
+            // once. Recording a delivery identical to the last one from this device would
+            // double every line, so the repeat is dropped rather than stored.
+            var signature = string.Join('\n', device.ClientLog);
+            if (_lastDiagnostics.TryGetValue(device.DeviceId, out var previous) && previous == signature)
             {
-                _logs.RemoveAt(0);
+                return;
             }
 
-            RecordStatus(request, now);
+            _lastDiagnostics[device.DeviceId] = signature;
+
+            foreach (var line in device.ClientLog)
+            {
+                Append(_deviceLines, MaxDeviceLines, new PaperframeLogEntry
+                {
+                    // The device's own clock is not trusted enough to order the log by, so
+                    // the line keeps its device timestamp in the text and is filed under
+                    // the moment it actually arrived.
+                    Timestamp = _timeProvider.GetLocalNow().DateTime,
+                    DeviceId = device.DeviceId,
+                    Battery = device.Battery,
+                    ScreenResolution = device.ScreenResolution,
+                    Service = DeviceService,
+                    ConfigId = NoConfig,
+                    Status = DeviceStatusName,
+                    Message = line,
+                    ScriptVersion = device.ScriptVersion
+                });
+            }
+        }
+    }
+
+    /// <summary>
+    /// Adds one entry to its own stream and enforces that stream's ceiling. Every entry
+    /// reaches the durable copy first, which is the one that is not allowed to forget.
+    /// Callers hold the lock.
+    /// </summary>
+    private void Append(List<PaperframeLogEntry> stream, int max, PaperframeLogEntry entry)
+    {
+        _file.Append(entry);
+
+        stream.Add(entry);
+
+        if (stream.Count > max)
+        {
+            stream.RemoveAt(0);
         }
     }
 
@@ -63,6 +141,7 @@ public class PaperframeLogService : IPaperframeLogService
         foreach (var staleId in _deviceStatuses.Keys.Where(id => configured?.ContainsKey(id) != true).ToList())
         {
             _deviceStatuses.Remove(staleId);
+            _lastDiagnostics.Remove(staleId);
         }
 
         if (configured?.ContainsKey(request.DeviceId) != true)
@@ -89,7 +168,8 @@ public class PaperframeLogService : IPaperframeLogService
     {
         lock (_lock)
         {
-            return _logs.OrderByDescending(l => l.Timestamp).ToList();
+            // Merged on the way out: callers want one chronological view, not two streams.
+            return _checkIns.Concat(_deviceLines).OrderByDescending(l => l.Timestamp).ToList();
         }
     }
 

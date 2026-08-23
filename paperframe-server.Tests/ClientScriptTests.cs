@@ -55,15 +55,126 @@ public class ClientScriptTests
     {
         var script = LauncherScript();
 
-        // Acquired once before the loop, released only by cleanup, so a transient
-        // failure cannot silently leave the screensaver free to paint over a frame.
-        Regex.Matches(script, @"^lipc-set-prop com\.lab126\.powerd preventScreenSaver 1$", RegexOptions.Multiline)
-            .Should().HaveCount(1);
+        // Reclaimed at the top of every iteration, because powerd takes it back on its own
+        // across some suspend cycles, and released in exactly one place on the way out.
+        Regex.Matches(script, @"preventScreenSaver 1").Should().HaveCount(1);
         Regex.Matches(script, @"preventScreenSaver 0").Should().HaveCount(1);
-        script.Should().Contain("trap 'cleanup 0' INT TERM");
+        script.IndexOf("while true; do", StringComparison.Ordinal)
+            .Should().BeLessThan(script.IndexOf("preventScreenSaver 1", StringComparison.Ordinal));
 
-        var cleanupBody = script[script.IndexOf("cleanup() {", StringComparison.Ordinal)..];
-        cleanupBody[..cleanupBody.IndexOf('}')].Should().Contain("preventScreenSaver 0");
+        var handler = script[script.IndexOf("on_exit() {", StringComparison.Ordinal)..];
+        handler[..handler.IndexOf('}')].Should().Contain("preventScreenSaver 0");
+    }
+
+    [Fact]
+    public void Launcher_routes_every_exit_through_one_handler()
+    {
+        var script = LauncherScript();
+
+        // Signals set a reason and exit rather than releasing the guard themselves,
+        // so the EXIT trap stays the only place the display is handed back.
+        script.Should().Contain("trap on_exit EXIT");
+        script.Should().MatchRegex(@"trap '.*EXIT_REASON=.*exit \d+' INT");
+        script.Should().MatchRegex(@"trap '.*EXIT_REASON=.*exit \d+' TERM");
+        script.Should().NotContain("cleanup");
+    }
+
+    [Fact]
+    public void Launcher_records_the_exit_reason_before_anything_that_can_fail()
+    {
+        var script = LauncherScript();
+
+        // The failures worth diagnosing are the ones that cannot reach the network,
+        // so the local write has to come first in both paths.
+        var handler = script[script.IndexOf("on_exit() {", StringComparison.Ordinal)..];
+
+        // The guard release comes first: it is the one step that must never be skipped,
+        // and the log write is the one that can block on a device mounted over USB.
+        handler.IndexOf("preventScreenSaver 0", StringComparison.Ordinal)
+            .Should().BeLessThan(handler.IndexOf("log_line EXIT", StringComparison.Ordinal));
+        handler.IndexOf("log_line EXIT", StringComparison.Ordinal)
+            .Should().BeLessThan(handler.IndexOf("report_failure", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void Launcher_waits_for_wifi_before_reaching_the_network()
+    {
+        var script = LauncherScript();
+
+        script.Should().Contain("WIFI_TIMEOUT_S=30");
+        script.Should().Contain("lipc-set-prop com.lab126.wifid enable 1");
+        script.Should().Contain("lipc-get-prop com.lab126.wifid cmState");
+
+        // A timed-out radio is fatal like any other failure: the alternative is a
+        // device that wakes, fails, and sleeps forever on a wifi password change.
+        script.Should().Contain(@"wait_for_wifi || die ""wifi_timeout_${WIFI_TIMEOUT_S}s""");
+        script.IndexOf("wait_for_wifi ||", StringComparison.Ordinal)
+            .Should().BeLessThan(script.IndexOf("retry_wget --header", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void Launcher_carries_a_local_log_that_cannot_take_the_loop_down()
+    {
+        var script = LauncherScript();
+
+        script.Should().Contain("log_line() {");
+        script.Should().Contain(ClientProtocol.DeviceStateDir);
+
+        // Every statement that touches the filesystem swallows its own failure: a full or
+        // read-only device must cost a log line, never the frame.
+        var body = Between(script, "log_line() {", "\n}");
+        foreach (var line in new[] { "mkdir -p", ">> \"$LOG_FILE\"", ">> \"$LOG_OUTBOX\"" })
+        {
+            body.Split('\n').Single(l => l.Contains(line)).Should().Contain("2>/dev/null");
+        }
+    }
+
+    [Theory]
+    [InlineData("/bin/sh")]
+    [InlineData("/bin/dash")]
+    public void Launcher_is_valid_posix_shell(string shell)
+    {
+        // Worth more than any amount of string matching: the device runs this, and a
+        // syntax error reaches it as a frame that never updates again.
+        if (!File.Exists(shell))
+        {
+            return;
+        }
+
+        var path = Path.Combine(Directory.CreateTempSubdirectory("paperframe-syntax-").FullName, "paperframe.sh");
+        File.WriteAllText(path, LauncherScript());
+
+        var process = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(
+            shell, ["-n", path]) { RedirectStandardError = true })!;
+        process.WaitForExit();
+
+        process.ExitCode.Should().Be(0, process.StandardError.ReadToEnd());
+    }
+
+    [Fact]
+    public void Launcher_ends_with_the_loop_and_its_sentinel()
+    {
+        var script = LauncherScript();
+
+        // Two invariants in one place. The sentinel is how a device tells a complete
+        // download from a truncated one. The loop being the last construct is what makes
+        // replacing this file underneath a running shell safe: once the loop is entered
+        // there is nothing left to read, so the update cannot corrupt what is executing.
+        script.TrimEnd().Should().EndWith(ClientProtocol.Sentinel);
+
+        var code = script.Split('\n')
+            .Select(l => l.Trim())
+            .Where(l => l.Length > 0 && !l.StartsWith('#'))
+            .ToArray();
+
+        code[^1].Should().Be("done");
+    }
+
+    private static string Between(string script, string start, string end)
+    {
+        var from = script.IndexOf(start, StringComparison.Ordinal);
+        var to = script.IndexOf(end, from, StringComparison.Ordinal);
+        return script[from..to];
     }
 
     [Fact]

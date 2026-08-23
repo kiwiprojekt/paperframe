@@ -30,17 +30,18 @@ public class PaperframeLogServiceTests
     public void LogCheckIn_trims_oldest_entries_after_maximum()
     {
         var service = NewService();
+        const int max = PaperframeLogService.MaxLogs;
 
-        for (var i = 0; i < 105; i++)
+        for (var i = 0; i < max + 5; i++)
         {
             service.LogCheckIn(new CheckInRequest($"kindle-{i}", "Calendar", "main", "Success", $"entry-{i}", "758,1024", "1.0", Battery: i));
         }
 
         var logs = service.GetLogs();
 
-        logs.Should().HaveCount(100);
+        logs.Should().HaveCount(max);
         logs.Should().NotContain(l => l.Message == "entry-0");
-        logs.Should().Contain(l => l.Message == "entry-104");
+        logs.Should().Contain(l => l.Message == $"entry-{max + 4}");
     }
 
     [Fact]
@@ -62,7 +63,7 @@ public class PaperframeLogServiceTests
         {
             Devices = new Dictionary<string, AppSettings.DeviceConfig> { ["kindle-a"] = new(), ["kindle-b"] = new() }
         });
-        var service = new PaperframeLogService(options);
+        var service = new PaperframeLogService(options, TestLog.Sink());
 
         service.LogCheckIn(new CheckInRequest("kindle-a", "Calendar", "main", "Success", "a", "758,1024", "1.1"));
         service.LogCheckIn(new CheckInRequest("kindle-b", "Calendar", "main", "Success", "b", "758,1024", "1.1"));
@@ -86,6 +87,6 @@ public class PaperframeLogServiceTests
             Devices = configuredDeviceIds.ToDictionary(id => id, _ => new AppSettings.DeviceConfig())
         };
 
-        return new PaperframeLogService(new TestOptionsMonitor<AppSettings>(settings), clock);
+        return new PaperframeLogService(new TestOptionsMonitor<AppSettings>(settings), TestSupport.TestLog.Sink(), clock);
     }
 }

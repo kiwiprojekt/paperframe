@@ -40,29 +40,21 @@ public class MainController : ControllerBase
             return AdminUi();
         }
 
-        if (_config.Devices == null || !_config.Devices.TryGetValue(device.DeviceId, out var deviceConfig))
+        var outcome = CheckInOutcome.Resolve(device, _config);
+
+        _logService.LogCheckIn(outcome.ToCheckIn(device));
+
+        return outcome.Verdict switch
         {
-            _logService.LogCheckIn(CheckInRequest.From(
-                device, "Unknown", "None", "Error", "Device not found in server configuration."));
+            CheckInVerdict.NotConfigured => NotFound("Device not configured."),
+            CheckInVerdict.Disabled => Disable(),
+            CheckInVerdict.Provision => Redirect(outcome.RedirectPath),
+            _ => Serve(device, outcome)
+        };
+    }
 
-            return NotFound("Device not configured.");
-        }
-
-        var serviceName = deviceConfig.ServiceName ?? "Unknown";
-        var configId = deviceConfig.ConfigId ?? "None";
-
-        if (deviceConfig.Disabled == true)
-        {
-            _logService.LogCheckIn(CheckInRequest.From(
-                device, serviceName, configId, "Disabled", "Device is disabled on server."));
-
-            // The header is what stops the loop; the body is an inert comment so that a
-            // client which somehow ran it anyway would still do nothing.
-            Response.Headers[ClientProtocol.DisabledHeader] = "1";
-
-            return Content("# Device is disabled on the Paperframe server.\n", "text/plain");
-        }
-
+    private IActionResult Serve(DeviceRequest device, CheckInOutcome outcome)
+    {
         _ = _homeAssistantService.UpdateEntities(device.DeviceId, device.Battery)
             .ContinueWith(t =>
             {
@@ -70,10 +62,16 @@ public class MainController : ControllerBase
                     Console.WriteLine($"HA update failed for {device.DeviceId}: {t.Exception.InnerException?.Message}");
             }, TaskContinuationOptions.OnlyOnFaulted);
 
-        _logService.LogCheckIn(CheckInRequest.From(
-            device, serviceName, configId, "Redirect", $"Redirected to /{serviceName}/{configId}"));
+        return Redirect(outcome.RedirectPath);
+    }
 
-        return Redirect($"/{serviceName.ToLower()}/{configId}");
+    private IActionResult Disable()
+    {
+        // The header is what stops the loop; the body is an inert comment so that a
+        // client which somehow ran it anyway would still do nothing.
+        Response.Headers[ClientProtocol.DisabledHeader] = "1";
+
+        return Content("# Device is disabled on the Paperframe server.\n", "text/plain");
     }
 
     private IActionResult AdminUi()

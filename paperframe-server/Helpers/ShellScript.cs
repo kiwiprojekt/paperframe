@@ -26,6 +26,40 @@ public static class ShellScript
     public const string Launcher = "paperframe.sh";
     public const string PhotoFrame = "photo-frame.sh";
     public const string RetryWgetHelper = "retry-wget.sh";
+    public const string LogHelper = "log.sh";
+    public const string Provision = "provision.sh";
+
+    /// <summary>
+    /// Placeholders that pull in a shared shell fragment. Resolving them here rather than at
+    /// each render site means including a fragment is a one-line change to the template that
+    /// wants it, instead of an argument every caller has to remember to pass.
+    /// </summary>
+    private static readonly Dictionary<string, string> Fragments = new()
+    {
+        ["RETRY_WGET_FN"] = RetryWgetHelper,
+        ["LOG_FN"] = LogHelper
+    };
+
+    /// <summary>
+    /// Values the server owns outright, available to every template without being passed in.
+    /// Nothing here varies per request. A caller may override one for its own template's
+    /// placeholders, but not for a fragment's — see <see cref="Render"/>.
+    ///
+    /// This is what keeps a photo renderer from having to name the launcher's state
+    /// directory just because the logging fragment writes there.
+    /// </summary>
+    private static readonly ScriptValue[] Defaults =
+    [
+        new("SCRIPT_VERSION", ClientProtocol.Version),
+        new("TARGET_VERSION", ClientProtocol.Version),
+        new("SLEEP_HEADER", ClientProtocol.SleepHeader),
+        new("DISABLED_HEADER", ClientProtocol.DisabledHeader),
+        new("LAUNCHER_PATH", ClientProtocol.LauncherDevicePath),
+        new("STATE_DIR", ClientProtocol.DeviceStateDir),
+        new("SENTINEL", ClientProtocol.Sentinel),
+        new("PROVISIONED_EXIT_CODE", ClientProtocol.ProvisionedExitCode.ToString()),
+        new("DECLINED_EXIT_CODE", ClientProtocol.ProvisionDeclinedExitCode.ToString())
+    ];
 
     private static readonly ConcurrentDictionary<string, string> Templates = new();
     private static readonly Regex Placeholder = new(@"@([A-Z0-9_]+)@", RegexOptions.Compiled);
@@ -51,16 +85,57 @@ public static class ShellScript
     /// </summary>
     public static string Render(string template, params ScriptValue[] values)
     {
-        var lookup = values.ToDictionary(v => v.Token, v => v.Value);
+        // Last wins, so a caller can override a default rather than colliding with it.
+        var lookup = new Dictionary<string, string>();
+        foreach (var supplied in Defaults.Concat(values))
+        {
+            lookup[supplied.Token] = supplied.Value;
+        }
 
-        return Placeholder.Replace(Load(template), match =>
+        return Substitute(template, lookup, template, fragmentsAllowed: true);
+    }
+
+    /// <summary>
+    /// Fills in one file's placeholders. <paramref name="requestedTemplate"/> is what the
+    /// caller actually asked to render, so an error names a file they recognise rather than
+    /// a fragment they never mentioned.
+    /// </summary>
+    private static string Substitute(
+        string template, Dictionary<string, string> lookup, string requestedTemplate, bool fragmentsAllowed) =>
+        Placeholder.Replace(Load(template), match =>
         {
             var token = match.Groups[1].Value;
-            return lookup.TryGetValue(token, out var value)
-                ? value
-                : throw new InvalidOperationException($"No value supplied for placeholder @{token}@ in '{template}'.");
+
+            if (lookup.TryGetValue(token, out var value))
+            {
+                return value;
+            }
+
+            if (!Fragments.TryGetValue(token, out var fragment))
+            {
+                throw new InvalidOperationException(
+                    $"No value supplied for placeholder @{token}@ in '{requestedTemplate}'"
+                    + (template == requestedTemplate ? "." : $" (via fragment '{template}')."));
+            }
+
+            // Fragments are leaves. One fragment pulling in another would make the include
+            // order load-bearing and open the door to a cycle; a fragment that needs a
+            // second one is a dependency the including template states for itself.
+            if (!fragmentsAllowed)
+            {
+                throw new InvalidOperationException(
+                    $"Fragment '{template}' may not include another fragment (@{token}@). "
+                    + $"Have '{requestedTemplate}' include both instead.");
+            }
+
+            // Rendered against the defaults alone, never the caller's values: a fragment's
+            // own placeholders are its business, and letting them reach up into the caller
+            // would make them arguments of every template that includes it.
+            return Substitute(fragment, DefaultLookup, requestedTemplate, fragmentsAllowed: false);
         });
-    }
+
+    private static readonly Dictionary<string, string> DefaultLookup =
+        Defaults.ToDictionary(v => v.Token, v => v.Value);
 
     public static string Escape(string? value) => ShellMetacharacters.Replace(value ?? "", "");
 
