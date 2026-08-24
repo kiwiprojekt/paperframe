@@ -87,36 +87,44 @@ public class PaperframeLogService : IPaperframeLogService
 
             _lastDiagnostics[device.DeviceId] = signature;
 
-            foreach (var line in device.ClientLog)
+            var entries = device.ClientLog.Select(line => new PaperframeLogEntry
             {
-                Append(_deviceLines, MaxDeviceLines, new PaperframeLogEntry
-                {
-                    // The device's own clock is not trusted enough to order the log by, so
-                    // the line keeps its device timestamp in the text and is filed under
-                    // the moment it actually arrived.
-                    Timestamp = _timeProvider.GetLocalNow().DateTime,
-                    DeviceId = device.DeviceId,
-                    Battery = device.Battery,
-                    ScreenResolution = device.ScreenResolution,
-                    Service = DeviceService,
-                    ConfigId = NoConfig,
-                    Status = DeviceStatusName,
-                    Message = line,
-                    ScriptVersion = device.ScriptVersion
-                });
+                // The device's own clock is not trusted enough to order the log by, so the
+                // line keeps its device timestamp in the text and is filed under the moment
+                // it actually arrived.
+                Timestamp = _timeProvider.GetLocalNow().DateTime,
+                DeviceId = device.DeviceId,
+                Battery = device.Battery,
+                ScreenResolution = device.ScreenResolution,
+                Service = DeviceService,
+                ConfigId = NoConfig,
+                Status = DeviceStatusName,
+                Message = line,
+                ScriptVersion = device.ScriptVersion
+            }).ToList();
+
+            _file.Append(entries);
+
+            foreach (var entry in entries)
+            {
+                Retain(_deviceLines, MaxDeviceLines, entry);
             }
         }
     }
 
     /// <summary>
-    /// Adds one entry to its own stream and enforces that stream's ceiling. Every entry
-    /// reaches the durable copy first, which is the one that is not allowed to forget.
-    /// Callers hold the lock.
+    /// Records one entry: durably first, because that is the copy that is not allowed to
+    /// forget, then in the in-memory stream it belongs to. Callers hold the lock.
     /// </summary>
     private void Append(List<PaperframeLogEntry> stream, int max, PaperframeLogEntry entry)
     {
         _file.Append(entry);
+        Retain(stream, max, entry);
+    }
 
+    /// <summary>Adds to an in-memory stream and enforces its ceiling. Callers hold the lock.</summary>
+    private static void Retain(List<PaperframeLogEntry> stream, int max, PaperframeLogEntry entry)
+    {
         stream.Add(entry);
 
         if (stream.Count > max)

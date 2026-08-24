@@ -1,6 +1,8 @@
 using System;
 using System.Globalization;
+using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 
 namespace paperframe_server.Services;
 
@@ -30,8 +32,20 @@ public sealed class PaperframeLogFile
         _path = pointer.FilePath;
     }
 
-    public void Append(PaperframeLogEntry entry)
+    public void Append(PaperframeLogEntry entry) => Append([entry]);
+
+    /// <summary>
+    /// Writes a batch as one operation. A device can deliver dozens of lines in a single
+    /// request, and appending them one at a time meant a directory check, a stat and a file
+    /// open apiece with the whole log service held.
+    /// </summary>
+    public void Append(IReadOnlyList<PaperframeLogEntry> entries)
     {
+        if (entries.Count == 0)
+        {
+            return;
+        }
+
         lock (_lock)
         {
             try
@@ -44,7 +58,7 @@ public sealed class PaperframeLogFile
 
                 Trim();
 
-                File.AppendAllText(_path, Format(entry) + Environment.NewLine);
+                File.AppendAllLines(_path, entries.Select(Format));
             }
             catch (Exception ex)
             {
@@ -87,7 +101,12 @@ public sealed class PaperframeLogFile
             return;
         }
 
+        // Through a temporary file: rewriting in place would leave the log this class exists
+        // to protect truncated if the process died midway.
         var lines = File.ReadAllLines(_path);
-        File.WriteAllLines(_path, lines[(lines.Length / 2)..]);
+        var trimmed = _path + ".tmp";
+
+        File.WriteAllLines(trimmed, lines[(lines.Length / 2)..]);
+        File.Move(trimmed, _path, overwrite: true);
     }
 }

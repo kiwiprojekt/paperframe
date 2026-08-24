@@ -34,9 +34,11 @@ public class CheckInOutcomeTests
     }
 
     [Fact]
-    public void An_outdated_device_with_auto_update_on_is_provisioned()
+    public void A_device_on_the_wrong_version_with_auto_update_on_is_provisioned()
     {
-        var outcome = CheckInOutcome.Resolve(Device(version: "1.2"), Config(autoUpdate: true));
+        // Any mismatch at or above the floor, in either direction: a server rolled back to
+        // an older launcher pulls its devices back down with it.
+        var outcome = CheckInOutcome.Resolve(Device(version: "1.4"), Config(autoUpdate: true));
 
         outcome.Verdict.Should().Be(CheckInVerdict.Provision);
         outcome.RedirectPath.Should().Be("/provision");
@@ -46,15 +48,15 @@ public class CheckInOutcomeTests
     public void An_outdated_device_is_left_alone_until_auto_update_is_switched_on()
     {
         // Every device pulls the same launcher, so an update goes out one device at a time.
-        var outcome = CheckInOutcome.Resolve(Device(version: "1.2"), Config(autoUpdate: null));
+        var outcome = CheckInOutcome.Resolve(Device(version: "1.4"), Config(autoUpdate: null));
 
         outcome.Verdict.Should().Be(CheckInVerdict.Serve);
         outcome.Message.Should().Contain("autoUpdate is off");
     }
 
     [Theory]
+    [InlineData("1.2")]
     [InlineData("1.1")]
-    [InlineData("1.0")]
     [InlineData(DeviceRequestReader.DefaultScriptVersion)]
     [InlineData("not-a-version")]
     public void A_device_too_old_to_be_driven_remotely_is_never_provisioned(string version)
@@ -70,7 +72,7 @@ public class CheckInOutcomeTests
     [Fact]
     public void A_device_that_gave_up_updating_is_served_rather_than_sent_back()
     {
-        var device = Device(version: "1.2") with { SkipProvisioning = true };
+        var device = Device(version: "1.4") with { SkipProvisioning = true };
 
         var outcome = CheckInOutcome.Resolve(device, Config(autoUpdate: true));
 
@@ -78,7 +80,7 @@ public class CheckInOutcomeTests
         outcome.RedirectPath.Should().Be("/calendar/family");
     }
 
-    private static DeviceRequest Device(string id = "kindle-a", string version = "1.2") =>
+    private static DeviceRequest Device(string id = "kindle-a", string version = "1.4") =>
         new(id, Battery: 80, ScreenResolution: "758,1024", ScriptVersion: version,
             ClientLog: [], SkipProvisioning: false);
 

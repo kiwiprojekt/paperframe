@@ -33,7 +33,32 @@ public class ProvisionControllerTests
         // Exiting 0 would leave the screen on the blank the launcher cleared before running
         // this, with the next wake landing right back here.
         script.Should().Contain($"exit {ClientProtocol.ProvisionDeclinedExitCode}");
-        Regex.Matches(script, @"^\s*exit 0$", RegexOptions.Multiline).Should().HaveCount(1);
+        Regex.Matches(script, @"^\s*exit 0$", RegexOptions.Multiline).Should().BeEmpty();
+    }
+
+    [Fact]
+    public void Every_step_past_the_point_of_no_return_rolls_back()
+    {
+        var script = Controller().Get();
+
+        // Once the launcher on disk has been replaced, no failure may leave it that way.
+        // From the line after the install: the install's own failure has nothing to undo.
+        var installed = script.IndexOf('\n', script.IndexOf("mv -f \"$STAGED\"", StringComparison.Ordinal));
+        foreach (var line in script[installed..].Split('\n').Where(l => l.Contains("|| ") && l.Contains("give_up")))
+        {
+            line.Should().Contain("roll_back", "every failure after the install has to undo it");
+        }
+
+        script.Should().Contain("roll_back \"could not make the new launcher executable\"");
+        script.Should().Contain("roll_back \"launcher unreadable after write\"");
+    }
+
+    [Fact]
+    public void A_half_written_attempt_counter_cannot_kill_the_script()
+    {
+        // A file cut short by a full disk leaves the version where the count should be, and
+        // feeding that to $(( )) is fatal in dash — which the launcher reads as a failure.
+        Controller().Get().Should().Contain("*[!0-9]*");
     }
 
     [Fact]
@@ -54,16 +79,17 @@ public class ProvisionControllerTests
         Controller().Get().Should().Contain($"= \"{ClientProtocol.Version}\"");
     }
 
-    [Theory]
-    [InlineData("1.2", "1")]
-    [InlineData("1.3", "")]
-    public void Who_restarts_the_loop_is_decided_by_the_server(string clientVersion, string expectLegacy)
+    [Fact]
+    public void There_is_no_taking_a_device_over_from_the_outside()
     {
-        // Comparing versions in shell would be a second, looser copy of a rule that already
-        // lives in ClientProtocol — and the shell copy would be an exact match, not a floor.
-        var script = Controller(clientVersion).Get();
+        // Launchers that cannot restart themselves are never sent here — they read the
+        // decline code as a script failure and stop, so every recoverable hiccup during an
+        // update became a dark frame. They are flagged for a manual re-install instead.
+        var script = Controller().Get();
 
-        script.Should().Contain($"if [ -n \"{expectLegacy}\" ]; then");
+        script.Should().NotContain("$PPID");
+        script.Should().NotContain("nohup");
+        script.Should().NotContain("kill -0");
     }
 
     [Fact]
@@ -77,7 +103,7 @@ public class ProvisionControllerTests
         served.TrimEnd().Should().EndWith(ClientProtocol.Sentinel);
     }
 
-    private static ProvisionController Controller(string clientVersion = "1.2")
+    private static ProvisionController Controller(string clientVersion = "1.3")
     {
         var context = new DefaultHttpContext
         {

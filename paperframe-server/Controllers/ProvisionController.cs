@@ -31,11 +31,7 @@ public class ProvisionController : ControllerBase
     public string Get() =>
         ShellScript.Render(ShellScript.Provision,
             // The launcher lives directly under this request's own route.
-            ShellScript.Text("LAUNCHER_PATH_URL", $"{Request.Path.Value?.TrimEnd('/')}/launcher"),
-            // Whether the running launcher can restart itself is a version comparison, and
-            // this is where versions are compared. The script only reads the answer.
-            ShellScript.Raw("LEGACY_HANDOVER",
-                ClientProtocol.SupportsSelfRestart(HttpContext.Device().ScriptVersion) ? "" : "1"));
+            ShellScript.Text("LAUNCHER_PATH_URL", $"{Request.Path.Value?.TrimEnd('/')}/launcher"));
 
     [HttpGet("launcher")]
     [IdentifiedDevice]

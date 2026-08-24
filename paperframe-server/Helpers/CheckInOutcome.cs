@@ -28,11 +28,16 @@ public enum CheckInVerdict
 /// <param name="Service">Rendering service to redirect to. Only meaningful for <see cref="CheckInVerdict.Serve"/>.</param>
 /// <param name="ConfigId">Configuration the service should render.</param>
 /// <param name="Message">What to write to the check-in log, whatever the verdict.</param>
+/// <param name="Configured">
+/// Whether this outcome addresses a configuration at all. False only for provisioning,
+/// which replaces a launcher rather than rendering anything.
+/// </param>
 public readonly record struct CheckInOutcome(
     CheckInVerdict Verdict,
     string Service,
     string ConfigId,
-    string Message)
+    string Message,
+    bool Configured = true)
 {
     /// <summary>Service name recorded for a device the configuration does not know.</summary>
     public const string UnknownService = "Unknown";
@@ -40,17 +45,20 @@ public readonly record struct CheckInOutcome(
     /// <summary>Service name recorded for a check-in that is answered with a launcher update.</summary>
     public const string ProvisionService = "Provision";
 
-    /// <summary>Config id recorded when the outcome has no configuration to render.</summary>
+    /// <summary>Config id recorded when a device's configuration names none.</summary>
     public const string NoConfig = "None";
 
     /// <summary>
-    /// The route this outcome redirects to, lowercased to match the client routes. A
-    /// service with nothing to render — provisioning — is addressed by its bare route
-    /// rather than carrying a placeholder id through the URL.
+    /// The route this outcome redirects to, lowercased to match the client routes.
+    ///
+    /// Driven by <see cref="Configured"/> rather than by the value of <see cref="ConfigId"/>:
+    /// a device whose configuration genuinely names no config id still addresses its service
+    /// the same way it always has, and only provisioning — which has no configuration at all
+    /// — is addressed by its bare route.
     /// </summary>
-    public string RedirectPath => ConfigId == NoConfig
-        ? $"/{Service.ToLowerInvariant()}"
-        : $"/{Service.ToLowerInvariant()}/{ConfigId}";
+    public string RedirectPath => Configured
+        ? $"/{Service.ToLowerInvariant()}/{ConfigId}"
+        : $"/{Service.ToLowerInvariant()}";
 
     /// <summary>
     /// Decides a check-in from configuration alone. Pure, so the rules can be read and
@@ -77,31 +85,57 @@ public readonly record struct CheckInOutcome(
             return Serve(service, configId);
         }
 
-        // Reasons an outdated device is still just served. Each one is a case where sending
-        // it to provisioning would cost more than leaving it a version behind.
-        var declineReason = !ClientProtocol.SupportsProvisioning(device.ScriptVersion)
-            // Its running shell would keep executing the old code, report the old version
-            // on the next wake, and be sent straight back — a frame that never renders.
-            ? $"Client {device.ScriptVersion} predates remote provisioning; re-install the launcher by hand."
-            : device.SkipProvisioning
-                // It tried, could not, and gave up. Sending it back would leave it cycling
-                // on a blank screen instead of showing the frame it can still render.
-                ? $"Client {device.ScriptVersion} could not update itself; serving normally."
-                : deviceConfig.AutoUpdate != true
-                    ? $"Client {device.ScriptVersion} is outdated but autoUpdate is off."
-                    : null;
+        // Reasons an outdated device is still just served. Each is a case where sending it
+        // to provisioning would cost more than leaving it a version behind.
+        var declineReason = DeclineReason(device, deviceConfig);
 
         return declineReason == null
             ? new(CheckInVerdict.Provision, ProvisionService, NoConfig,
-                $"Client {device.ScriptVersion} is outdated; sending launcher {ClientProtocol.Version}.")
+                $"Client {device.ScriptVersion} is outdated; sending launcher {ClientProtocol.Version}.",
+                Configured: false)
             : Serve(service, configId, declineReason);
     }
 
-    private static CheckInOutcome Serve(string service, string configId, string? reason = null) =>
-        new(CheckInVerdict.Serve, service, configId,
-            reason == null
-                ? $"Redirected to /{service}/{configId}"
-                : $"{reason} Redirected to /{service}/{configId}");
+    /// <summary>
+    /// Why this outdated device should be served rather than updated, or null if it should
+    /// be updated.
+    /// </summary>
+    private static string? DeclineReason(DeviceRequest device, AppSettings.DeviceConfig deviceConfig)
+    {
+        // Its running shell would keep executing the old code, report the old version on the
+        // next wake, and be sent straight back — a frame that never renders again.
+        if (!ClientProtocol.SupportsProvisioning(device.ScriptVersion))
+        {
+            return $"Client {device.ScriptVersion} predates remote provisioning; re-install the launcher by hand.";
+        }
+
+        // It tried, could not, and gave up. Sending it back would leave it cycling on a
+        // blank screen instead of showing the frame it can still render.
+        if (device.SkipProvisioning)
+        {
+            return $"Client {device.ScriptVersion} could not update itself; serving normally.";
+        }
+
+        // Every device pulls the same launcher, so updates go out one device at a time.
+        if (deviceConfig.AutoUpdate != true)
+        {
+            return $"Client {device.ScriptVersion} is outdated but autoUpdate is off.";
+        }
+
+        return null;
+    }
+
+    private static CheckInOutcome Serve(string service, string configId, string? reason = null)
+    {
+        var outcome = new CheckInOutcome(CheckInVerdict.Serve, service, configId, Message: string.Empty);
+
+        return outcome with
+        {
+            Message = reason == null
+                ? $"Redirected to {outcome.RedirectPath}"
+                : $"{reason} Redirected to {outcome.RedirectPath}"
+        };
+    }
 
     /// <summary>Builds the check-in record for this outcome.</summary>
     public CheckInRequest ToCheckIn(DeviceRequest device) =>

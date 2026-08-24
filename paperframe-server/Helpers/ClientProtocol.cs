@@ -11,18 +11,17 @@ public static class ClientProtocol
     public const string Version = "1.3";
 
     /// <summary>
-    /// Oldest launcher the provisioning script knows how to replace. Anything older is left
-    /// alone: it would download the new launcher, keep running the old code from its open
-    /// shell, report the old version again on the next wake, and loop forever without ever
-    /// rendering a frame.
+    /// Oldest launcher that can be updated remotely: the first one that understands the exit
+    /// codes below and can restart itself onto a replacement.
+    ///
+    /// Anything older is served normally and flagged for a manual re-install. Driving those
+    /// from the outside was tried and abandoned: a launcher that predates
+    /// <see cref="ProvisionDeclinedExitCode"/> reads it as a script failure and stops, so
+    /// every recoverable hiccup during an update — a failed download, a truncated file, a
+    /// spent attempt budget — became a frame that stayed dark until someone walked over with
+    /// a USB cable. Copying the file across by hand once costs a great deal less.
     /// </summary>
-    public const string ProvisioningFloorVersion = "1.2";
-
-    /// <summary>
-    /// Oldest launcher that understands <see cref="ProvisionedExitCode"/> and can restart
-    /// itself. Older ones have to be taken over from the outside instead.
-    /// </summary>
-    public const string RestartProtocolVersion = "1.3";
+    public const string ProvisioningFloorVersion = "1.3";
 
     /// <summary>Response header carrying the seconds until the device's next wake.</summary>
     public const string SleepHeader = "X-Sleep-Time";
@@ -60,7 +59,6 @@ public static class ClientProtocol
 
     private static readonly Version Current = new(Version);
     private static readonly Version ProvisioningFloor = new(ProvisioningFloorVersion);
-    private static readonly Version RestartProtocolFloor = new(RestartProtocolVersion);
 
     /// <summary>Whether a reported <c>script_version</c> is the launcher this server ships.</summary>
     public static bool IsCurrent(string scriptVersion) => scriptVersion == Version;
@@ -73,12 +71,6 @@ public static class ClientProtocol
     public static bool SupportsProvisioning(string scriptVersion) =>
         AtLeast(scriptVersion, ProvisioningFloor);
 
-    /// <summary>
-    /// Whether a reported <c>script_version</c> can restart itself when the provisioning
-    /// script signals success, rather than having to be taken over from the outside.
-    /// </summary>
-    public static bool SupportsSelfRestart(string scriptVersion) =>
-        AtLeast(scriptVersion, RestartProtocolFloor);
 
     private static bool AtLeast(string scriptVersion, Version floor) =>
         System.Version.TryParse(scriptVersion, out var reported) && reported >= floor;
@@ -86,11 +78,11 @@ public static class ClientProtocol
     /// <summary>Sanity check on the constants above, so a bad edit fails here rather than on a device.</summary>
     static ClientProtocol()
     {
-        if (RestartProtocolFloor < ProvisioningFloor || Current < RestartProtocolFloor)
+        if (Current < ProvisioningFloor)
         {
             throw new InvalidOperationException(
                 "Client protocol versions are inconsistent: the provisioning floor must not exceed the "
-                + "restart-protocol floor, and neither may exceed the shipped launcher version.");
+                + "shipped launcher version.");
         }
     }
 }

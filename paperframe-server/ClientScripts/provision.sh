@@ -2,10 +2,13 @@
 # Launcher update, downloaded and run by the Paperframe launcher like any other
 # rendering script. Replaces the launcher on disk and restarts the loop with it.
 #
-# The order below is start-verify-then-kill on purpose: if the new launcher dies on
-# startup, the old one is still running and still working. Every check happens before
-# anything irreversible, because the failure this guards against is a frame that never
-# comes back without a USB cable.
+# Every check happens before anything irreversible, and everything past that point can be
+# rolled back, because the failure this guards against is a frame that never comes back
+# without a USB cable.
+#
+# Only launchers that can restart themselves are ever sent here. Taking an older one over
+# from the outside was tried and removed: it reads the decline code as a script failure and
+# stops, so any recoverable hiccup mid-update left the frame dark.
 
 LAUNCHER="@LAUNCHER_PATH@"
 STAGED="$LAUNCHER.new"
@@ -33,9 +36,20 @@ give_up() {
 # The budget is recorded against the version being installed. Without that, a device that
 # exhausted its attempts on one bad launcher would refuse the fixed one that follows, and
 # the only reset would be a USB cable — the exact cost this whole design exists to avoid.
+mkdir -p "@STATE_DIR@" 2>/dev/null
+
 attempts=0
 if [ "$(head -n 1 "$ATTEMPTS_FILE" 2>/dev/null)" = "@TARGET_VERSION@" ]; then
-    attempts=$(($(tail -n 1 "$ATTEMPTS_FILE" 2>/dev/null || echo 0)))
+    recorded=$(tail -n 1 "$ATTEMPTS_FILE" 2>/dev/null)
+
+    # A count is only a count if it is digits. A file cut short by a full disk leaves the
+    # version on the last line instead, and feeding that to $(( )) is a fatal shell error,
+    # which this launcher would read as a failed render.
+    case "$recorded" in
+        ''|*[!0-9]*) recorded=0 ;;
+    esac
+
+    attempts=$recorded
 fi
 
 attempts=$((attempts + 1))
@@ -63,17 +77,22 @@ sh -n "$STAGED" 2>/dev/null || give_up "downloaded launcher failed syntax check"
 cp -pf "$LAUNCHER" "$BACKUP" 2>/dev/null
 [ -s "$BACKUP" ] || give_up "could not back up the current launcher"
 
+# Everything past this line has already changed the launcher on disk, so every way out of
+# it goes through one rollback rather than each failure remembering to undo its own share.
+roll_back() {
+    mv -f "$BACKUP" "$LAUNCHER" 2>/dev/null
+    chmod +x "$LAUNCHER" 2>/dev/null
+    sync
+    give_up "$1, rolled back"
+}
+
 mv -f "$STAGED" "$LAUNCHER" || give_up "could not replace the launcher"
-chmod +x "$LAUNCHER" || give_up "could not make the new launcher executable"
+chmod +x "$LAUNCHER" || roll_back "could not make the new launcher executable"
 
 # /mnt/us is a fuse overlay over vfat: a file written and reopened without a flush can
 # come back stale or short. exec is a fresh open, so verify what is actually on disk now.
 sync
-sh -n "$LAUNCHER" 2>/dev/null || {
-    mv -f "$BACKUP" "$LAUNCHER" 2>/dev/null
-    sync
-    give_up "launcher unreadable after write, rolled back"
-}
+sh -n "$LAUNCHER" 2>/dev/null || roll_back "launcher unreadable after write"
 
 log_line EXEC "launcher written, handing over to @TARGET_VERSION@"
 
@@ -81,37 +100,6 @@ log_line EXEC "launcher written, handing over to @TARGET_VERSION@"
 # is the only evidence that actually means the update worked — clearing it on the way out
 # would let a handover that fails every time reset its own budget and retry for ever.
 #
-# How the loop gets restarted onto the new launcher depends on which launcher is running
-# this script.
-#
-# Launchers older than the exit-code contract have no idea what code @PROVISIONED_EXIT_CODE@ means and
-# would report it as a script failure and stop. They have to be taken over from the
-# outside — started, checked, and only then killed, so a launcher that cannot start leaves
-# the working one untouched.
-#
-# Which of the two applies is decided by the server, which already knows the version that
-# checked in and where the cutoff is; comparing versions in shell would be a second,
-# looser copy of that rule. This branch goes away once no device predates the contract.
-if [ -n "@LEGACY_HANDOVER@" ]; then
-    nohup "$LAUNCHER" > /dev/null 2>&1 &
-    new_pid=$!
-    sleep 2
-
-    if ! kill -0 "$new_pid" 2>/dev/null; then
-        mv -f "$BACKUP" "$LAUNCHER" 2>/dev/null
-        sync
-        give_up "new launcher did not stay up, rolled back"
-    fi
-
-    # The parent's exit trap hands the display back to powerd, so the new launcher has to
-    # reclaim it once the old one is gone.
-    kill "$PPID" 2>/dev/null
-    sleep 1
-    lipc-set-prop com.lab126.powerd preventScreenSaver 1
-
-    exit 0
-fi
-
-# Everything since: the launcher execs the new file itself when it sees this code, which
-# needs no handover, no second process, and no guard juggling.
+# The launcher execs the new file itself when it sees this code: no handover, no second
+# process, no guard juggling. Only launchers that understand it are ever sent here.
 exit @PROVISIONED_EXIT_CODE@

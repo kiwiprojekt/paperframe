@@ -7,6 +7,9 @@
 LOG_DIR="@STATE_DIR@"
 LOG_FILE="$LOG_DIR/paperframe.log"
 LOG_OUTBOX="$LOG_DIR/outbox"
+# Lines handed to a request that has not come back yet. Kept apart from the outbox so a
+# failed delivery can put them back, and a successful one cannot take newer lines with it.
+LOG_SENDING="$LOG_DIR/outbox.sending"
 LOG_MAX_BYTES=65536
 LOG_KEEP_BYTES=32768
 # What one check-in can carry in a request header. The outbox is trimmed to this as it
@@ -55,14 +58,31 @@ log_line() {
 
 # Everything not yet delivered, flattened onto one line for a request header. Empty when
 # there is nothing to say.
+#
+# The outbox is set aside rather than read in place, because a request carrying it is not
+# instant: retry_wget appends its own attempt lines while the wget it describes is still
+# running. Clearing the outbox afterwards would delete those as though they had been sent
+# — and they are the lines that only exist when the network is misbehaving.
 log_pending() {
-    [ -s "$LOG_OUTBOX" ] || return 0
-    tr '\n' '~' < "$LOG_OUTBOX" 2>/dev/null | tr -d '\r'
+    # A batch still sitting here means the last delivery never completed. Fold it back in
+    # ahead of what has accumulated since, so nothing is lost and the order is preserved.
+    if [ -s "$LOG_SENDING" ]; then
+        cat "$LOG_SENDING" "$LOG_OUTBOX" > "$LOG_OUTBOX.merged" 2>/dev/null \
+            && mv -f "$LOG_OUTBOX.merged" "$LOG_OUTBOX" 2>/dev/null
+        rm -f "$LOG_SENDING" "$LOG_OUTBOX.merged" 2>/dev/null
+        log_trim "$LOG_OUTBOX" "$LOG_OUTBOX_MAX_BYTES" "$LOG_OUTBOX_MAX_BYTES"
+    fi
+
+    [ -s "$LOG_OUTBOX" ] && mv -f "$LOG_OUTBOX" "$LOG_SENDING" 2>/dev/null
+    [ -s "$LOG_SENDING" ] || return 0
+
+    tr '\n' '~' < "$LOG_SENDING" 2>/dev/null | tr -d '\r'
 }
 
-# Called once the server has the pending lines. They stay in the full log; only the
-# outbox is cleared, so a delivery never costs the device its own history.
+# Called once the server has the pending lines. They stay in the full log; only the copy
+# that was handed over is dropped, so a delivery never costs the device its own history
+# and never swallows what was written while it was in flight.
 log_delivered() {
-    : > "$LOG_OUTBOX" 2>/dev/null
+    rm -f "$LOG_SENDING" 2>/dev/null
     return 0
 }
