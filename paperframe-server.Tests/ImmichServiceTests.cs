@@ -46,6 +46,8 @@ public class ImmichServiceTests
     public async Task GetImage_fails_clearly_when_album_has_no_assets()
     {
         using var httpTest = new HttpTest();
+        // No assetCount on the list entry, so it defaults to 0 — a genuinely empty album,
+        // on any server version.
         httpTest.RespondWithJson(new[] { new { albumName = "Frame", id = "album-1" } });
         httpTest.RespondWithJson(new
         {
@@ -66,6 +68,46 @@ public class ImmichServiceTests
         await act.Should().ThrowAsync<InvalidOperationException>()
             .WithMessage("Album 'Frame' contains no assets.");
         httpTest.ShouldNotHaveCalled("http://immich.local/api/assets/*");
+        httpTest.ShouldNotHaveCalled("http://immich.local/api/search/metadata");
+    }
+
+    [Fact]
+    public async Task GetImage_falls_back_to_search_metadata_when_album_response_omits_assets()
+    {
+        // Immich v3 dropped the `assets` field from GET /albums/{id}; assets have to be
+        // fetched via POST /search/metadata instead. The album list's own assetCount is
+        // what tells this apart from a genuinely empty album.
+        using var httpTest = new HttpTest();
+        var imageBytes = CreateImageBytes(40, 30);
+        httpTest.RespondWithJson(new[] { new { albumName = "Frame", id = "album-1", assetCount = 2 } });
+        httpTest.RespondWithJson(new { albumName = "Frame", id = "album-1" });
+        httpTest.RespondWithJson(new
+        {
+            assets = new
+            {
+                total = 2,
+                count = 2,
+                items = new[] { new { id = "asset-1" }, new { id = "asset-2" } }
+            }
+        });
+        httpTest.RespondWith(() => new ByteArrayContent(imageBytes), 200);
+
+        var service = new ImmichService(new ImageProcessingService());
+
+        var result = await service.GetImage(new AppSettings.ImmichConfig
+        {
+            ApiUrl = "http://immich.local/api/",
+            ApiKey = "key",
+            AlbumName = "Frame"
+        }, "kindle-v3", 40, 30);
+
+        result.Should().NotBeEmpty();
+        httpTest.ShouldHaveCalled("http://immich.local/api/search/metadata")
+            .WithVerb(HttpMethod.Post)
+            .WithRequestJson(new { albumIds = new[] { "album-1" }, size = 2 })
+            .WithHeader("x-api-key", "key")
+            .Times(1);
+        httpTest.ShouldHaveCalled("http://immich.local/api/assets/asset-*/thumbnail?size=preview").Times(1);
     }
 
     [Fact]
