@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 
+using paperframe_server.Helpers;
+
 namespace paperframe_server.Services;
 
 public class PaperframeLogEntry
@@ -13,6 +15,7 @@ public class PaperframeLogEntry
     public string ConfigId { get; set; } = string.Empty;
     public string Status { get; set; } = string.Empty; // "Redirect", "Success", "Error"
     public string Message { get; set; } = string.Empty;
+    public string ScriptVersion { get; set; } = string.Empty;
 }
 
 public class DeviceStatus
@@ -21,11 +24,19 @@ public class DeviceStatus
     public int? Battery { get; set; }
     public DateTime LastUpdate { get; set; }
     public string Status { get; set; } = string.Empty;
+    public string ScriptVersion { get; set; } = string.Empty;
 }
 
 public interface IPaperframeLogService
 {
-    void LogCheckIn(string deviceId, int? battery, string screenResolution, string service, string configId, string status, string message);
+    void LogCheckIn(CheckInRequest request);
+
+    /// <summary>
+    /// Records the log lines a device carried in with it. Separate from
+    /// <see cref="LogCheckIn"/> because these are history, not a verdict: they must not
+    /// overwrite what the device's current status says about it.
+    /// </summary>
+    void LogDeviceDiagnostics(DeviceRequest device);
     List<PaperframeLogEntry> GetLogs();
     Dictionary<string, DeviceStatus> GetDeviceStatuses();
 }

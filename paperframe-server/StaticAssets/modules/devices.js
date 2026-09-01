@@ -1,4 +1,4 @@
-import { AppConfig, DeviceStatuses } from './state.js';
+import { AppConfig, DeviceStatuses, ExpectedScriptVersion } from './state.js';
 import { markUnsavedChanges, openDeleteModal, showToast } from './ui-utils.js';
 import { openLauncherModal } from './launcher.js';
 
@@ -64,6 +64,7 @@ export function renderDeviceCards() {
         const status  = DeviceStatuses[id];
         const battEl  = f('battery');
         const lastEl  = f('lastSeen');
+        const verEl   = f('scriptVersion');
 
         if (status) {
             const battVal = status.battery !== null ? `${status.battery}%` : '---';
@@ -72,11 +73,20 @@ export function renderDeviceCards() {
 
             const updateDate = new Date(status.lastUpdate);
             lastEl.textContent = `${updateDate.toLocaleTimeString()} (${timeAgo(updateDate)})`;
+
+            // An outdated launcher keeps working but misses whatever the newer protocol
+            // added, so say so rather than just printing a number nobody can judge.
+            const reported = status.scriptVersion || 'unknown';
+            const current  = !ExpectedScriptVersion || reported === ExpectedScriptVersion;
+            verEl.textContent = current ? reported : `${reported} (update available)`;
+            if (!current) verEl.style.color = 'var(--warning)';
         } else {
             battEl.className   = 'text-secondary';
             battEl.textContent = 'Unknown';
             lastEl.className   = 'text-secondary';
             lastEl.textContent = 'Never';
+            verEl.className    = 'text-secondary';
+            verEl.textContent  = 'Unknown';
         }
 
         tpl.querySelector('[data-action="edit"]').onclick    = () => openDeviceModal(id);
@@ -101,12 +111,34 @@ export function openDeviceModal(id = null) {
         const dev          = AppConfig.devices[id];
         serviceSelect.value = dev.serviceName;
         populateModalConfigDropdown(dev.configId);
+
+        const cronPreset = document.getElementById('modalDeviceWakeupCronPreset');
+        const cronInput = document.getElementById('modalDeviceWakeupCron');
+        if (dev.wakeupCron) {
+            if (cronPresets().includes(dev.wakeupCron)) {
+                cronPreset.value = dev.wakeupCron;
+                cronInput.style.display = 'none';
+                cronInput.value = '';
+            } else {
+                cronPreset.value = 'custom';
+                cronInput.style.display = 'block';
+                cronInput.value = dev.wakeupCron;
+            }
+        } else {
+            cronPreset.value = '';
+            cronInput.style.display = 'none';
+            cronInput.value = '';
+        }
     } else {
         titleEl.innerText    = 'Register New Paperframe Device';
         idInput.value        = '';
         idInput.disabled     = false;
         serviceSelect.value  = 'Calendar';
         populateModalConfigDropdown();
+
+        document.getElementById('modalDeviceWakeupCronPreset').value = '';
+        document.getElementById('modalDeviceWakeupCron').style.display = 'none';
+        document.getElementById('modalDeviceWakeupCron').value = '';
     }
 
     document.getElementById('deviceModal').classList.add('active');
@@ -116,6 +148,26 @@ export function openDeviceModal(id = null) {
 export function closeDeviceModal() {
     document.getElementById('deviceModal').classList.remove('active');
     editingDeviceId = null;
+}
+
+// The offered schedules are the dropdown's own options; restating them here would let
+// the two drift apart silently.
+function cronPresets() {
+    return Array.from(document.getElementById('modalDeviceWakeupCronPreset').options)
+        .map(option => option.value)
+        .filter(value => value && value !== 'custom');
+}
+
+export function handleCronPresetChange() {
+    const preset = document.getElementById('modalDeviceWakeupCronPreset').value;
+    const customInput = document.getElementById('modalDeviceWakeupCron');
+    if (preset === 'custom') {
+        customInput.style.display = 'block';
+    } else {
+        customInput.style.display = 'none';
+        customInput.value = '';
+    }
+    markUnsavedChanges(true);
 }
 
 export function populateModalConfigDropdown(selectedConfigId = null) {
@@ -155,11 +207,28 @@ export function saveDeviceModalData() {
         return;
     }
 
+    const cronPreset = document.getElementById('modalDeviceWakeupCronPreset').value;
+    const cronCustom = document.getElementById('modalDeviceWakeupCron').value.trim();
+    let finalCron = '';
+    
+    if (cronPreset === 'custom') {
+        if (!cronCustom) {
+            alert('Please provide a valid cron expression.');
+            return;
+        }
+        // Full syntax validation happens server-side (WakeupSchedule.TryParseCron) so the
+        // rule is only encoded once.
+        finalCron = cronCustom;
+    } else {
+        finalCron = cronPreset;
+    }
+
     AppConfig.devices        = AppConfig.devices || {};
     AppConfig.devices[deviceId] = {
         serviceName: serviceSelect.value,
         configId:    configSelect.value,
-        disabled:    editingDeviceId ? (AppConfig.devices[editingDeviceId]?.disabled ?? false) : false
+        disabled:    editingDeviceId ? (AppConfig.devices[editingDeviceId]?.disabled ?? false) : false,
+        wakeupCron:  finalCron || null
     };
 
     closeDeviceModal();

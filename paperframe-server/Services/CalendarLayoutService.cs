@@ -2,15 +2,13 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
-using System.Text.RegularExpressions;
+
+using paperframe_server.Helpers;
 
 namespace paperframe_server.Services;
 
 public class CalendarLayoutService : ICalendarLayoutService
 {
-    private static string ShellEscape(string input) =>
-        Regex.Replace(input, @"[""\\$`!\r\n\t]", "");
-
     public string CompileScript(CalendarLayoutContext context)
     {
         var config = context.Config;
@@ -20,8 +18,8 @@ public class CalendarLayoutService : ICalendarLayoutService
         var m = context.ScaleMultiplier;
         var events = context.Events;
 
-        var month = ShellEscape(date.ToString("MMMM", culture).ToUpperInvariant());
-        var dayOfWeek = ShellEscape(date.ToString("dddd", culture).ToUpperInvariant());
+        var month = ShellScript.Escape(date.ToString("MMMM", culture).ToUpperInvariant());
+        var dayOfWeek = ShellScript.Escape(date.ToString("dddd", culture).ToUpperInvariant());
 
         var dayOfWeekFontSize = dayOfWeek.Length > 7 ? 48 : 64;
         var dayOfWeekTop = (int)((dayOfWeekFontSize == 48 ? 400 : 395) * m);
@@ -92,11 +90,11 @@ $FBINK -q ""{dayOfWeek}"" -t regular=$FONT,size={dayOfWeekFontSize},top={dayOfWe
     }
 
     private string GetEventsHeader(string header, int top, decimal m)
-        => @$"$FBINK -q ""{ShellEscape(header.ToUpperInvariant())}"" -t regular=$FONT,size=14,top={top},left={(int)(30*m)} -O";
+        => @$"$FBINK -q ""{ShellScript.Escape(header.ToUpperInvariant())}"" -t regular=$FONT,size=14,top={top},left={(int)(30*m)} -O";
 
     private string GetEventLine(ICalendarService.CalendarEntry ev, int top, TimeZoneInfo timeZone, decimal m)
         => @$"$FBINK -q ""{GetDisplayTime(ev, timeZone)}"" -t regular=$FONT,size=12,top={top},left={(int)(50*m)} -O  -C GRAY6
-$FBINK -q ""{ShellEscape(ev.Summary)}"" -t regular=$FONT,size=12,top={top},left={(int)(150*m)} -O  -C GRAY3";
+$FBINK -q ""{ShellScript.Escape(ev.Summary)}"" -t regular=$FONT,size=12,top={top},left={(int)(150*m)} -O  -C GRAY3";
     
     private string GetDisplayTime(ICalendarService.CalendarEntry ev, TimeZoneInfo timeZone) 
         => ev.IsAllDayEvent ? "~~~~" : TimeZoneInfo.ConvertTime(ev.UtcDate, timeZone).ToString("HH:mm");

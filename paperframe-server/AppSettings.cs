@@ -24,6 +24,9 @@ public class AppSettings
         public bool? EnableArtChicago { get; set; }
         public bool? EnableHomeAssistant { get; set; }
         public string? ManagerPassword { get; set; }
+
+        /// <summary>IANA id used to resolve device wakeup cron expressions. Defaults to UTC.</summary>
+        public string? TimeZoneId { get; set; }
     }
 
     public class DeviceConfig
@@ -31,6 +34,15 @@ public class AppSettings
         public string? ServiceName { get; set; }
         public string? ConfigId { get; set; }
         public bool? Disabled { get; set; }
+        public string? WakeupCron { get; set; }
+
+        /// <summary>
+        /// Whether the server may replace this device's launcher when it checks in with an
+        /// outdated version. Off by default: every device pulls the same launcher, so a bad
+        /// one would take the whole fleet out at once, and recovery means a USB cable per
+        /// Kindle. Promote one device, watch it survive a cycle, then enable the rest.
+        /// </summary>
+        public bool? AutoUpdate { get; set; }
     }
 
     public class CalendarConfig

@@ -1,4 +1,5 @@
 using paperframe_server.Services;
+using paperframe_server.Helpers;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
 using System.IO;
@@ -17,7 +18,7 @@ public class MainController : ControllerBase
     private readonly AppSettings _config;
 
     public MainController(
-        IOptionsSnapshot<AppSettings> appSettings, 
+        IOptionsSnapshot<AppSettings> appSettings,
         IHomeAssistantService homeAssistantService,
         IPaperframeLogService logService,
         IWebHostEnvironment env)
@@ -27,87 +28,58 @@ public class MainController : ControllerBase
         _env = env;
         _config = appSettings.Value;
     }
-    
+
     [HttpGet]
-    public IActionResult Get([FromHeader(Name = "device_id")] string? deviceId = null)
+    public IActionResult Get()
     {
-        var hasBattery = this.Request.Headers.TryGetValue("battery", out var batteryVal);
-        var hasRes = this.Request.Headers.TryGetValue("screen_res", out var resVal);
-        int? battery = hasBattery && int.TryParse(batteryVal, out var b) ? b : null;
-        string res = hasRes ? resVal.ToString() : "unknown";
+        var device = HttpContext.Device();
 
-        if (!string.IsNullOrEmpty(deviceId))
+        // A browser sends no device_id, so this same route serves the admin UI.
+        if (!device.IsIdentified)
         {
-            if (_config.Devices != null && _config.Devices.TryGetValue(deviceId, out var deviceConfig))
-            {
-                var serviceName = deviceConfig.ServiceName ?? "Unknown";
-                var configId = deviceConfig.ConfigId ?? "None";
-
-                if (deviceConfig.Disabled == true)
-                {
-                    _logService.LogCheckIn(
-                        deviceId, 
-                        battery, 
-                        res, 
-                        serviceName, 
-                        configId, 
-                        "Disabled", 
-                        "Device is disabled on server.");
-
-                    var disableScript = $@"#!/bin/sh
-# Name: DisableDevice
-# Author: Paperframe Server
-# Device is disabled on the Paperframe Server
-
-echo ""Device {deviceId} is disabled.""
-lipc-set-prop com.lab126.powerd preventScreenSaver 0
-exit 1
-";
-                    return Content(disableScript, "text/plain");
-                }
-
-                _ = _homeAssistantService.UpdateEntities(deviceId, battery)
-                    .ContinueWith(t =>
-                    {
-                        if (t.Exception != null)
-                            Console.WriteLine($"HA update failed for {deviceId}: {t.Exception.InnerException?.Message}");
-                    }, TaskContinuationOptions.OnlyOnFaulted);
-
-                _logService.LogCheckIn(
-                    deviceId, 
-                    battery, 
-                    res, 
-                    serviceName, 
-                    configId, 
-                    "Redirect", 
-                    $"Redirected to /{serviceName}/{configId}");
-
-                return Redirect($"/{serviceName.ToLower()}/{configId}");
-            }
-            else
-            {
-                _logService.LogCheckIn(
-                    deviceId, 
-                    battery, 
-                    res, 
-                    "Unknown", 
-                    "None", 
-                    "Error", 
-                    $"Device not found in server configuration.");
-
-                return NotFound("Device not configured.");
-            }
+            return AdminUi();
         }
-        
-        // Serve Administration UI if no device_id header is present
+
+        var outcome = CheckInOutcome.Resolve(device, _config);
+
+        _logService.LogCheckIn(outcome.ToCheckIn(device));
+
+        return outcome.Verdict switch
+        {
+            CheckInVerdict.NotConfigured => NotFound("Device not configured."),
+            CheckInVerdict.Disabled => Disable(),
+            CheckInVerdict.Provision => Redirect(outcome.RedirectPath),
+            _ => Serve(device, outcome)
+        };
+    }
+
+    private IActionResult Serve(DeviceRequest device, CheckInOutcome outcome)
+    {
+        _ = _homeAssistantService.UpdateEntities(device.DeviceId, device.Battery)
+            .ContinueWith(t =>
+            {
+                if (t.Exception != null)
+                    Console.WriteLine($"HA update failed for {device.DeviceId}: {t.Exception.InnerException?.Message}");
+            }, TaskContinuationOptions.OnlyOnFaulted);
+
+        return Redirect(outcome.RedirectPath);
+    }
+
+    private IActionResult Disable()
+    {
+        // The header is what stops the loop; the body is an inert comment so that a
+        // client which somehow ran it anyway would still do nothing.
+        Response.Headers[ClientProtocol.DisabledHeader] = "1";
+
+        return Content("# Device is disabled on the Paperframe server.\n", "text/plain");
+    }
+
+    private IActionResult AdminUi()
+    {
         var indexPath = Path.Combine(_env.ContentRootPath, "StaticAssets", "index.html");
-        if (System.IO.File.Exists(indexPath))
-        {
-            return PhysicalFile(indexPath, "text/html");
-        }
-        else
-        {
-            return Ok("Paperframe Server is active. Admin UI is missing from StaticAssets/index.html.");
-        }
+
+        return System.IO.File.Exists(indexPath)
+            ? PhysicalFile(indexPath, "text/html")
+            : Ok("Paperframe Server is active. Admin UI is missing from StaticAssets/index.html.");
     }
 }

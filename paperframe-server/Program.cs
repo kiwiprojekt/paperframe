@@ -1,4 +1,5 @@
 using Flurl.Http;
+using paperframe_server.Middleware;
 using paperframe_server.Services;
 using Microsoft.Extensions.FileProviders;
 using System;
@@ -69,6 +70,12 @@ public class Program
         // Register ConfigFilePointer so Controllers can write back to it
         builder.Services.AddSingleton(new ConfigFilePointer(fullConfigPath));
 
+        // The durable log lives beside the configuration, so it survives a restart and
+        // rides along with whatever the user already backs up.
+        builder.Services.AddSingleton(new LogFilePointer(Path.Combine(
+            Path.GetDirectoryName(fullConfigPath) ?? ".", "logs", "paperframe.log")));
+        builder.Services.AddSingleton<PaperframeLogFile>();
+
         builder.Services.AddControllers();
         
         builder.Services.Configure<AppSettings>(builder.Configuration.GetSection("Configuration"));
@@ -92,6 +99,9 @@ public class Program
                 Path.Combine(builder.Environment.ContentRootPath, "StaticAssets")),
             RequestPath = "/assets"
         });
+
+        app.UseMiddleware<WakeupHeaderMiddleware>();
+        app.UseMiddleware<ClientLogMiddleware>();
 
         app.Use(async (context, next) =>
         {

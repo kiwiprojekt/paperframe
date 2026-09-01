@@ -1,11 +1,13 @@
 using System.Text;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using FluentAssertions;
 using Flurl.Http.Testing;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using NSubstitute;
 using paperframe_server.Controllers;
+using paperframe_server.Helpers;
 using paperframe_server.Services;
 using paperframe_server.Tests.TestSupport;
 
@@ -41,6 +43,30 @@ public class ConfigControllerTests
         json.GetProperty("Configuration").GetProperty("Settings").GetProperty("ServerAddress").GetString().Should().Be("http://paperframe.local");
         json.GetProperty("Configuration").GetProperty("Devices").GetProperty("kindle-a").GetProperty("ServiceName").GetString().Should().Be("Calendar");
     }
+
+    [Fact]
+    public void SaveConfig_rejects_invalid_cron_expression()
+    {
+        var tempDir = Directory.CreateTempSubdirectory("paperframe-config-test-");
+        var configPath = Path.Combine(tempDir.FullName, "appsettings.json");
+        File.WriteAllText(configPath, "{ }");
+        var controller = NewController(configPath, new AppSettings());
+
+        var result = controller.SaveConfig(new AppSettings
+        {
+            Devices = new Dictionary<string, AppSettings.DeviceConfig>
+            {
+                ["kindle-a"] = new() { WakeupCron = "invalid_cron_string" }
+            }
+        });
+
+        result.Should().BeOfType<BadRequestObjectResult>();
+        var badRequest = (BadRequestObjectResult)result;
+        var message = JsonSerializer.Deserialize<JsonElement>(JsonSerializer.Serialize(badRequest.Value))
+            .GetProperty("message").GetString();
+        message.Should().StartWith("Invalid cron expression for device kindle-a:");
+    }
+
 
     [Fact]
     public async Task ValidateCalendar_rejects_invalid_culture_before_fetching_url()
@@ -138,34 +164,24 @@ public class ConfigControllerTests
     }
 
     [Fact]
-    public void DownloadClientScript_uses_request_origin_device_id_and_sleep_seconds()
+    public void Device_statuses_carry_the_launcher_version_the_server_would_hand_out()
     {
-        var controller = NewController(options: new AppSettings
+        // Without it the manager can report a version but not judge it, which is the
+        // only reason to record one.
+        var logService = Substitute.For<IPaperframeLogService>();
+        logService.GetDeviceStatuses().Returns(new Dictionary<string, DeviceStatus>
         {
-            Devices = new Dictionary<string, AppSettings.DeviceConfig>
-            {
-                ["kindle-a"] = new() { ServiceName = "Calendar", ConfigId = "family" }
-            }
+            ["kindle-a"] = new() { DeviceId = "kindle-a", ScriptVersion = "1.0" }
         });
-        controller.ControllerContext = new ControllerContext
-        {
-            HttpContext = new DefaultHttpContext
-            {
-                Request =
-                {
-                    Scheme = "https",
-                    Host = new HostString("paperframe.local", 8443)
-                }
-            }
-        };
+        var controller = new ConfigController(
+            new ConfigFilePointer(Path.Combine(Directory.CreateTempSubdirectory("paperframe-status-test-").FullName, "appsettings.json")),
+            new TestOptionsMonitor<AppSettings>(new AppSettings()),
+            logService);
 
-        var result = controller.DownloadClientScript("kindle-a", sleepSeconds: 123);
+        var payload = Payload(controller.GetDeviceStatuses());
 
-        var file = result.Should().BeOfType<FileContentResult>().Subject;
-        var script = Encoding.UTF8.GetString(file.FileContents);
-        script.Should().Contain("DEVICE_ID=\"kindle-a\"");
-        script.Should().Contain("SLEEP_TIME_S=123");
-        script.Should().Contain("SERVICES_URL=\"https://paperframe.local:8443\"");
+        payload.GetProperty("expectedScriptVersion").GetString().Should().Be(ClientProtocol.Version);
+        payload.GetProperty("devices").GetProperty("kindle-a").GetProperty("scriptVersion").GetString().Should().Be("1.0");
     }
 
     private static ConfigController NewController(string? configPath = null, AppSettings? options = null)

@@ -10,11 +10,11 @@ public class PaperframeLogServiceTests
     public void LogCheckIn_returns_newest_logs_first_and_keeps_latest_device_status()
     {
         var clock = new MutableTimeProvider(new DateTimeOffset(2026, 5, 25, 10, 0, 0, TimeSpan.Zero));
-        var service = new PaperframeLogService(clock);
+        var service = NewService(clock, "kindle-a");
 
-        service.LogCheckIn("kindle-a", 42, "758,1024", "Calendar", "main", "Redirect", "first");
+        service.LogCheckIn(new CheckInRequest("kindle-a", "Calendar", "main", "Redirect", "first", "758,1024", "1.1", Battery: 42));
         clock.Advance(TimeSpan.FromMinutes(5));
-        service.LogCheckIn("kindle-a", null, "758,1024", "Calendar", "main", "Success", "second");
+        service.LogCheckIn(new CheckInRequest("kindle-a", "Calendar", "main", "Success", "second", "758,1024", "1.2", Battery: null));
 
         var logs = service.GetLogs();
         logs.Select(l => l.Message).Should().Equal("second", "first");
@@ -22,23 +22,71 @@ public class PaperframeLogServiceTests
         var status = service.GetDeviceStatuses()["kindle-a"];
         status.Status.Should().Be("Success");
         status.Battery.Should().Be(42);
+        status.ScriptVersion.Should().Be("1.2");
         status.LastUpdate.Should().Be(new DateTime(2026, 5, 25, 10, 5, 0));
     }
 
     [Fact]
     public void LogCheckIn_trims_oldest_entries_after_maximum()
     {
-        var service = new PaperframeLogService();
+        var service = NewService();
+        const int max = PaperframeLogService.MaxLogs;
 
-        for (var i = 0; i < 105; i++)
+        for (var i = 0; i < max + 5; i++)
         {
-            service.LogCheckIn($"kindle-{i}", i, "758,1024", "Calendar", "main", "Success", $"entry-{i}");
+            service.LogCheckIn(new CheckInRequest($"kindle-{i}", "Calendar", "main", "Success", $"entry-{i}", "758,1024", "1.0", Battery: i));
         }
 
         var logs = service.GetLogs();
 
-        logs.Should().HaveCount(100);
+        logs.Should().HaveCount(max);
         logs.Should().NotContain(l => l.Message == "entry-0");
-        logs.Should().Contain(l => l.Message == "entry-104");
+        logs.Should().Contain(l => l.Message == $"entry-{max + 4}");
+    }
+
+    [Fact]
+    public void LogCheckIn_logs_unconfigured_devices_without_tracking_their_status()
+    {
+        var service = NewService(configuredDeviceIds: "kindle-a");
+
+        service.LogCheckIn(new CheckInRequest("kindle-a", "Calendar", "main", "Success", "known", "758,1024", "1.1"));
+        service.LogCheckIn(new CheckInRequest("intruder", "Client", "None", "Error", "unknown", "758,1024", "1.1"));
+
+        service.GetLogs().Select(l => l.DeviceId).Should().BeEquivalentTo(["kindle-a", "intruder"]);
+        service.GetDeviceStatuses().Keys.Should().Equal("kindle-a");
+    }
+
+    [Fact]
+    public void GetDeviceStatuses_omits_devices_that_were_removed_from_configuration()
+    {
+        var options = new TestOptionsMonitor<AppSettings>(new AppSettings
+        {
+            Devices = new Dictionary<string, AppSettings.DeviceConfig> { ["kindle-a"] = new(), ["kindle-b"] = new() }
+        });
+        var service = new PaperframeLogService(options, TestLog.Sink());
+
+        service.LogCheckIn(new CheckInRequest("kindle-a", "Calendar", "main", "Success", "a", "758,1024", "1.1"));
+        service.LogCheckIn(new CheckInRequest("kindle-b", "Calendar", "main", "Success", "b", "758,1024", "1.1"));
+
+        options.CurrentValue = new AppSettings
+        {
+            Devices = new Dictionary<string, AppSettings.DeviceConfig> { ["kindle-a"] = new() }
+        };
+        service.LogCheckIn(new CheckInRequest("kindle-a", "Calendar", "main", "Success", "a again", "758,1024", "1.2"));
+
+        service.GetDeviceStatuses().Keys.Should().Equal("kindle-a");
+    }
+
+    private static PaperframeLogService NewService(params string[] configuredDeviceIds) =>
+        NewService(null, configuredDeviceIds);
+
+    private static PaperframeLogService NewService(TimeProvider? clock, params string[] configuredDeviceIds)
+    {
+        var settings = new AppSettings
+        {
+            Devices = configuredDeviceIds.ToDictionary(id => id, _ => new AppSettings.DeviceConfig())
+        };
+
+        return new PaperframeLogService(new TestOptionsMonitor<AppSettings>(settings), TestSupport.TestLog.Sink(), clock);
     }
 }

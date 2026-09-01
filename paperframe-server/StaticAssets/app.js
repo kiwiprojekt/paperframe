@@ -1,7 +1,7 @@
 import { AppConfig, DeviceStatuses, hasUnsavedChanges, setAppConfig, setDeviceStatuses, setUnsavedChanges } from './modules/state.js';
 import { showToast, openConfirmModal, closeConfirmModal, openDeleteModal, toggleSecretVisibility, markUnsavedChanges, switchTab } from './modules/ui-utils.js';
 import { AuthError, apiFetch, showLoginOverlay, hideLoginOverlay, checkAuth, submitLogin, logout, loadConfigData, saveConfiguration, reloadConfigData, loadTelemetryLogs, getServerUrl } from './modules/api.js';
-import { timeAgo, renderDeviceCards, openDeviceModal, closeDeviceModal, populateModalConfigDropdown, saveDeviceModalData, deleteDevice } from './modules/devices.js';
+import { timeAgo, renderDeviceCards, openDeviceModal, closeDeviceModal, populateModalConfigDropdown, saveDeviceModalData, deleteDevice, handleCronPresetChange } from './modules/devices.js';
 import { renderCalendarConfigUI, openCalendarConfigModal, closeCalendarConfigModal, renderEditCalIcalUrls, updateEditCalIcalUrlValue, addEditCalIcalUrlRow, removeEditCalIcalUrlRow, saveCalendarConfigModalData, deleteCalendarConfigFromModal, deleteCalendarConfig, validateCalendarConfigFromModal } from './modules/calendar.js';
 import { renderImmichConfigUI, openImmichConfigModal, closeImmichConfigModal, loadAlbumsForEditModal, selectEditModalDropdownAlbum, saveImmichConfigModalData, deleteImmichConfigFromModal, deleteImmichConfig, validateImmichConfigFromModal } from './modules/immich.js';
 import { renderArtChicagoConfigUI, openArtChicagoConfigModal, closeArtChicagoConfigModal, saveArtChicagoConfigModalData, deleteArtChicagoConfigFromModal, deleteArtChicagoConfig, validateArtChicagoConfigFromModal } from './modules/artchicago.js';
@@ -19,6 +19,7 @@ window.openDeviceModal = openDeviceModal;
 window.closeDeviceModal = closeDeviceModal;
 window.saveDeviceModalData = saveDeviceModalData;
 window.populateModalConfigDropdown = populateModalConfigDropdown;
+window.handleCronPresetChange = handleCronPresetChange;
 window.validateHomeAssistantConnection = validateHomeAssistantConnection;
 window.markUnsavedChanges = markUnsavedChanges;
 window.updateSidebarVisibility = updateSidebarVisibility;

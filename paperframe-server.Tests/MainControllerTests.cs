@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using NSubstitute;
 using paperframe_server.Controllers;
+using paperframe_server.Helpers;
 using paperframe_server.Services;
 using paperframe_server.Tests.TestSupport;
 
@@ -35,14 +36,20 @@ public class MainControllerTests
         controller.Request.Headers["battery"] = "80";
         controller.Request.Headers["screen_res"] = "600,800";
 
-        var result = controller.Get("kindle-missing");
+        var result = controller.Get();
 
         result.Should().BeOfType<NotFoundObjectResult>();
-        logService.Received().LogCheckIn("kindle-missing", 80, "600,800", "Unknown", "None", "Error", Arg.Any<string>());
+        logService.Received().LogCheckIn(Arg.Is<CheckInRequest>(r => 
+            r.DeviceId == "kindle-missing" && 
+            r.Battery == 80 && 
+            r.ScreenResolution == "600,800" && 
+            r.Service == "Unknown" && 
+            r.ConfigId == "None" && 
+            r.Status == "Error"));
     }
 
     [Fact]
-    public void Get_disabled_device_returns_disable_script_and_skips_home_assistant_update()
+    public void Get_disabled_device_answers_with_the_disable_header_and_skips_home_assistant_update()
     {
         var ha = Substitute.For<IHomeAssistantService>();
         ha.UpdateEntities(Arg.Any<string>(), Arg.Any<int?>()).Returns(Task.CompletedTask);
@@ -55,10 +62,17 @@ public class MainControllerTests
         }, homeAssistantService: ha);
         controller.Request.Headers["device_id"] = "kindle-a";
 
-        var result = controller.Get("kindle-a");
+        var result = controller.Get();
+
+        // The header is what stops the loop, so the device never has to run anything to
+        // learn it is disabled.
+        controller.Response.Headers[ClientProtocol.DisabledHeader].ToString().Should().Be("1");
 
         var content = result.Should().BeOfType<ContentResult>().Subject;
-        content.Content.Should().Contain("Device kindle-a is disabled.");
+        content.Content.Should().StartWith("#");
+        // Releasing the screensaver guard is the launcher's job; doing it here would
+        // drop it for the rest of the loop's life.
+        content.Content.Should().NotContain("preventScreenSaver");
         ha.DidNotReceive().UpdateEntities(Arg.Any<string>(), Arg.Any<int?>());
     }
 
@@ -78,11 +92,16 @@ public class MainControllerTests
         controller.Request.Headers["device_id"] = "kindle-a";
         controller.Request.Headers["battery"] = "95";
 
-        var result = controller.Get("kindle-a");
+        var result = controller.Get();
 
         result.Should().BeOfType<RedirectResult>().Which.Url.Should().Be("/immich/frame");
         ha.Received().UpdateEntities("kindle-a", 95);
-        logService.Received().LogCheckIn("kindle-a", 95, "unknown", "Immich", "frame", "Redirect", Arg.Any<string>());
+        logService.Received().LogCheckIn(Arg.Is<CheckInRequest>(r => 
+            r.DeviceId == "kindle-a" && 
+            r.Battery == 95 && 
+            r.Service == "Immich" && 
+            r.ConfigId == "frame" && 
+            r.Status == "Redirect"));
     }
 
     private static MainController NewController(

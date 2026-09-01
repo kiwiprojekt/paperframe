@@ -9,6 +9,7 @@
     </PropertyGroup>
 
     <ItemGroup>
+      <PackageReference Include="Cronos" Version="0.8.4" />
       <PackageReference Include="Flurl.Http" Version="4.0.2" />
       <PackageReference Include="Ical.Net" Version="5.2.1" />
       <PackageReference Include="Magick.NET-Q8-AnyCPU" Version="14.13.1" />
@@ -16,6 +17,11 @@
 
     <ItemGroup>
       <Folder Include="StaticAssets\" />
+    </ItemGroup>
+
+    <!-- Shell scripts served to devices. Embedded so they cannot go missing at runtime. -->
+    <ItemGroup>
+      <EmbeddedResource Include="ClientScripts\**\*.sh" />
     </ItemGroup>
 
     <ItemGroup>

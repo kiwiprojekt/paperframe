@@ -117,6 +117,7 @@ export async function loadConfigData() {
         document.getElementById('settingsServerAddress').value = s.serverAddress || '';
         document.getElementById('currentOriginHint').textContent = window.location.origin;
         document.getElementById('settingsPassword').value = s.managerPassword || '';
+        document.getElementById('settingsTimeZoneId').value = s.timeZoneId || '';
 
         const calEnabled = s.enableCalendar      !== false;
         const immEnabled = s.enableImmich        !== false;
@@ -162,6 +163,7 @@ export async function saveConfiguration() {
     AppConfig.settings.enableArtChicago    = document.getElementById('settingsEnableArtChicago').checked;
     AppConfig.settings.enableHomeAssistant = document.getElementById('settingsEnableHa').checked;
     AppConfig.settings.managerPassword     = document.getElementById('settingsPassword').value;
+    AppConfig.settings.timeZoneId          = document.getElementById('settingsTimeZoneId').value.trim() || null;
 
     try {
         const response = await apiFetch('/api/config', {
@@ -232,6 +234,7 @@ export async function loadTelemetryLogs() {
             let badgeClass = 'badge-success';
             if (l.status.toLowerCase() === 'error')    badgeClass = 'badge-error';
             if (l.status.toLowerCase() === 'disabled') badgeClass = 'badge-error';
+            if (l.status.toLowerCase() === 'aborted')  badgeClass = 'badge-error';
             if (l.status.toLowerCase() === 'redirect') badgeClass = 'badge-redirect';
             const statusBadge = f('statusBadge');
             statusBadge.textContent = l.status;
