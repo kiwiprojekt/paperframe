@@ -64,6 +64,34 @@ function mockFetch(window, implementation) {
   return fetch;
 }
 
+function calendarDeviceConfig() {
+  return {
+    devices: {
+      'kindle-a': { serviceName: 'Calendar', configId: 'family', disabled: false }
+    },
+    calendar: {},
+    immich: {},
+    homeAssistant: {},
+    settings: {}
+  };
+}
+
+// The status endpoint reports every device plus the launcher version the server
+// currently ships, so a card can tell an up-to-date client from a stale one.
+function deviceStatusPayload(reportedVersion, expectedVersion) {
+  return {
+    devices: {
+      'kindle-a': {
+        battery: 88,
+        status: 'Success',
+        lastUpdate: new Date().toISOString(),
+        scriptVersion: reportedVersion
+      }
+    },
+    expectedScriptVersion: expectedVersion
+  };
+}
+
 afterEach(() => {
   vi.restoreAllMocks();
 });
@@ -148,22 +176,8 @@ describe('Paperframe manager app.js', () => {
 
   it('renders device cards with status and updates disabled state from the toggle', async () => {
     const { document, api, close } = await loadApp();
-    api.setAppConfig({
-      devices: {
-        'kindle-a': { serviceName: 'Calendar', configId: 'family', disabled: false }
-      },
-      calendar: {},
-      immich: {},
-      homeAssistant: {},
-      settings: {}
-    });
-    api.setDeviceStatuses({
-      'kindle-a': {
-        battery: 88,
-        status: 'Success',
-        lastUpdate: new Date().toISOString()
-      }
-    });
+    api.setAppConfig(calendarDeviceConfig());
+    api.setDeviceStatuses(deviceStatusPayload('1.3', '1.3'));
 
     api.renderDeviceCards();
 
@@ -178,36 +192,46 @@ describe('Paperframe manager app.js', () => {
     close();
   });
 
-  it('updates launcher preview from sleep inputs and custom server address', async () => {
-    const { window, document, api, close } = await loadApp();
-    api.setAppConfig({
-      devices: {},
-      calendar: {},
-      immich: {},
-      homeAssistant: {},
-      settings: { serverAddress: 'http://custom.local' }
-    });
-    mockFetch(window, async (url) => {
-      const urlObj = new URL(url, 'http://paperframe.local');
-      const sleepSeconds = urlObj.searchParams.get('sleepSeconds');
-      return {
-        status: 200,
-        ok: true,
-        text: async () => `#!/bin/sh\nDEVICE_ID="kindle-a"\nSLEEP_TIME_S=${sleepSeconds}\nSERVICES_URL="http://custom.local"\n`
-      };
-    });
-    api.setLauncherDeviceId('kindle-a');
-    document.getElementById('launcherSleepHours').value = '1';
-    document.getElementById('launcherSleepMinutes').value = '2';
-    document.getElementById('launcherSleepSeconds').value = '3';
+  it.each([
+    ['1.3', '1.3', '1.3'],
+    ['1.2', '1.3', '1.2 (update available)']
+  ])('shows launcher %s against server %s as "%s"', async (reported, expected, shown) => {
+    const { document, api, close } = await loadApp();
+    api.setAppConfig(calendarDeviceConfig());
+    api.setDeviceStatuses(deviceStatusPayload(reported, expected));
 
+    api.renderDeviceCards();
+
+    expect(document.querySelector('[data-field="scriptVersion"]').textContent).toBe(shown);
+    close();
+  });
+
+  it('loads the launcher preview for the selected device', async () => {
+    const { window, document, api, close } = await loadApp();
+    const script = '#!/bin/sh\nDEVICE_ID="kindle-a"\nSERVICES_URL="http://custom.local"\n';
+    const fetch = mockFetch(window, async () => ({
+      status: 200,
+      ok: true,
+      text: async () => script
+    }));
+
+    api.setLauncherDeviceId('kindle-a');
     await api.updateLauncherScriptPreview();
 
-    expect(document.getElementById('totalSleepSecondsDisplay').innerText).toBe(3723);
-    const script = document.getElementById('launcherCodeContent').innerText;
-    expect(script).toContain('DEVICE_ID="kindle-a"');
-    expect(script).toContain('SLEEP_TIME_S=3723');
-    expect(script).toContain('SERVICES_URL="http://custom.local"');
+    expect(fetch.mock.calls[0][0]).toBe('/api/config/download-client/kindle-a');
+    expect(document.getElementById('launcherCodeContent').innerText).toBe(script);
+    close();
+  });
+
+  it('reports a failed launcher preview instead of leaving the placeholder', async () => {
+    const { window, document, api, close } = await loadApp();
+    mockFetch(window, async () => ({ status: 500, ok: false }));
+
+    api.setLauncherDeviceId('kindle-a');
+    await api.updateLauncherScriptPreview();
+
+    expect(document.getElementById('launcherCodeContent').innerText)
+      .toBe('Failed to fetch launcher script preview.');
     close();
   });
 
